@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ping = "0.5.2"
 pnet = "0.35.0"
+rand = "0.8.5"
+tokio = "1.41.1"
