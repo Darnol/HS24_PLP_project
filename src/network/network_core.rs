@@ -6,9 +6,6 @@ use std::process::Command;
 use std::time::Duration;
 use std::net::IpAddr;
 
-use ping::ping;
-use rand::random;
-
 pub fn show_interfaces() -> () {
     println!("Showing interfaces");
 
@@ -26,32 +23,49 @@ pub fn show_interfaces() -> () {
     }
 }
 
-pub fn ping_host(ip: IpAddr, timeout: Duration) -> () {
-    let ping_stream = ping(ip, Some(timeout), Some(166), Some(3), Some(5), Some(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23])).unwrap();
-    println!("Ping stream: {:?}", ping_stream);
+pub fn ping_host_syscmd(ip: IpAddr, timeout: u32) -> () {
 
-    // let ping_stream = ping(ip, None).expect("Failed to create ping");
-    // for message in ping_stream {
-    //     match message {
-    //         pinger::PingResult::Pong(duration, _) => {
-    //             println!("Duration: {:?}", duration)
-    //         }
-    //         _ => {} // Handle errors, log ping timeouts, etc.
-    //     } 
-    // }
-}
+    // ip to String
+    let ip_str = ip.to_string();
 
-pub fn ping_host_syscmd(ip: IpAddr) -> () {
-    let output = Command::new("ping")
-        .arg("8.8.8.8")
-        .output()
-        .expect("Failed to execute ping");
+    println!("ping ip {}", ip_str);
 
-    if output.status.success() {
-        println!("Ping output:\n{}", String::from_utf8_lossy(&output.stdout));
-    } else {
-        println!("Ping failed:\n{}", String::from_utf8_lossy(&output.stderr));
+    // Determine OS
+    if cfg!(target_os = "windows") {
+        println!("Windows OS detected");
+
+        let command = format!(
+            "ping {} -n 1 -w {} >nul && echo Ping succeeded || echo Ping failed",
+            ip_str,
+            timeout
+        );
+
+        println!("Command: {}", command);
+
+        let output = Command::new("cmd")
+            .args(["/C", &command])
+            .output()
+            .expect("Failed to execute command");
+
+        let result = String::from_utf8_lossy(&output.stdout);
+        println!("{}", result);
+
+    } else if cfg!(target_os = "macos") {
+        println!("Mac OS detected");
+    } else if cfg!(target_os = "linux") {
+        panic!("Unsupported OS detected");
     }
+
+    // let output = Command::new("ping")
+    //     .arg(ip_str)
+    //     .output()
+    //     .expect("Failed to execute ping");
+
+    // if output.status.success() {
+    //     println!("Ping output:\n{}", String::from_utf8_lossy(&output.stdout));
+    // } else {
+    //     println!("Ping failed:\n{}", String::from_utf8_lossy(&output.stderr));
+    // }
 }
 
 pub fn scan_interfaces() -> HashSet<String> {
