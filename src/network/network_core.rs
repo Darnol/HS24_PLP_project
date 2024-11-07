@@ -41,21 +41,35 @@ pub fn scan_interfaces() -> HashSet<String> {
             Channel::Ethernet(_, mut rx) => {
                 println!("Channel type: Ethernet");
 
-                let mut attempts = 0;
-                let max_attempts = 3; // Set the maximum number of attempts
+                let mut packet_count = 0;
 
-                while attempts < max_attempts {
-                    if let Ok(packet) = rx.next() {
-                        if let Some(ipv4_packet) = Ipv4Packet::new(packet) {
-                            let source_ip = ipv4_packet.get_source();
-                            active_hosts.insert(source_ip.to_string());
-                            break; // Stop after receiving the first packet
-                        }
-                    } else {
-                        // No packet received; increment the attempt counter
-                        attempts += 1;
+                while let Ok(packet) = rx.next() {
+                    packet_count += 1;
+                    println!("Received packet number: {:?}", packet_count);
+
+                    if let Some(ipv4_packet) = Ipv4Packet::new(packet) {
+                        let source_ip = ipv4_packet.get_source();
+                        println!("Received packet from: {:?}", source_ip);
+                    }
+
+                    if packet_count >= 10 {
+                        break;
                     }
                 }
+                
+                // while attempts < max_attempts {
+                //     println!("Attempt: {}", attempts);
+                //     if let Ok(packet) = rx.next() {
+                //         if let Some(ipv4_packet) = Ipv4Packet::new(packet) {
+                //             println!("Received packet: {:?}", ipv4_packet);
+                //             let source_ip = ipv4_packet.get_source();
+                //             active_hosts.insert(source_ip.to_string());
+                //         }
+                //     } else {
+                //         // No packet received; increment the attempt counter
+                //         attempts += 1;
+                //     }
+                // }
             }
             _ => {
                 eprintln!("Unsupported channel type");
