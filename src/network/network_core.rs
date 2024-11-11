@@ -3,9 +3,9 @@ use pnet::packet::ipv4::Ipv4Packet;
 
 use std::collections::HashSet;
 use std::process::Command;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
-pub fn show_interfaces() -> () {
+pub fn analyse_interfaces() -> () {
     println!("Showing interfaces");
 
     // All interfaces
@@ -18,7 +18,14 @@ pub fn show_interfaces() -> () {
 
     for interface in interfaces_no_loopback {
         // Show the interface
-        println!("Interface: {:?}", interface);
+        println!("Interface: {:?}", interface.description);
+
+        // Print the IPs of possibly relevant interfaces
+        for ipv4network in interface.ips {
+            if ipv4network.ip() != Ipv4Addr::UNSPECIFIED {
+                println!("-- Possible interesting IPv4 Address: {}/{}", ipv4network.ip(), ipv4network.prefix());
+            }
+        }
     }
 }
 
