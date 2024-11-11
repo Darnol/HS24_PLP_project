@@ -12,16 +12,26 @@ use std::net::{IpAddr, Ipv4Addr, TcpStream};
 const TCP_PORTS: [u16; 10] = [20,21,22,23,25,53,80,110,143,443];
 
 #[derive(Debug)]
-enum Status {
+pub enum Status {
     Up,
     Down,
 }
 
 #[derive(Debug)]
-struct NetworkDevice {
-    ip_address: Ipv4Addr,
-    status: Status,
-    open_ports: Option<Vec<u16>>, // Only populated if the device is "up"
+pub struct PortScanResult {
+    pub ip_address: Ipv4Addr,
+    pub status: Status,
+    pub open_ports: Option<Vec<u16>>, // Only populated if the device is "up"
+}
+
+impl PortScanResult {
+    fn new(ip_address: Ipv4Addr, status: Status, open_ports: Option<Vec<u16>>) -> Self {
+        PortScanResult {
+            ip_address,
+            status,
+            open_ports,
+        }
+    }
 }
 
 fn create_ping_command(ip_str: &String, timeout: u32) -> String {
@@ -75,7 +85,7 @@ pub fn analyse_interfaces() -> () {
     }
 }
 
-pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> bool {
+pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> PortScanResult {
 
     // ip to String
     let ip_str = ip.to_string();
@@ -99,17 +109,18 @@ pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> bool 
         .status()
         .expect("Failed to execute command");
 
-
     if status.success() {
         if verboose {
             println!("Ping successful");
         }
-        return true;
+        // Scan common TCP ports
+        let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(100), &TCP_PORTS);
+        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, Some(open_ports));
     } else {
         if verboose {
             println!("Ping failed");
         }
-        return false;
+        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, None);
     }
 }
 
@@ -123,12 +134,9 @@ pub fn scan_ports_tcp(ip: IpAddr, timeout: Duration, ports: &[u16]) -> Vec<u16> 
             timeout
         ) {
             Ok(_) => {
-                println!("Port {} is open", port);
                 open_ports.push(*port);
             }
-            Err(_) => {
-                println!("Port {} is closed", port);
-            }
+            Err(_) => {}
         }
     }
 

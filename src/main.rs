@@ -6,7 +6,6 @@ use crate::network::network_core::{analyse_interfaces, ping_host_syscmd, scan_po
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
 use std::time::Duration;
-use std::collections::HashMap;
 use std::net::{IpAddr};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -25,24 +24,24 @@ async fn main() {
     // let active_hosts = scan_interfaces();
     // println!("Active hosts: {:?}", active_hosts);
 
-    // Test ping
-    let ip: IpAddr = "1.1.1.1".parse().unwrap();
-    // let ip: IpAddr = "1.2.3.4".parse().unwrap();
-    println!("Pinging host: {:?}", ip);
-    let timeout: u32 = 100;
-    println!("Timeout: {:?}", timeout);
-    let success_ping = ping_host_syscmd(ip, timeout, true).await;
-    println!("Status ping {:?} : {:?}", ip, success_ping);
+    // // Test ping
+    // let ip: IpAddr = "1.1.1.1".parse().unwrap();
+    // // let ip: IpAddr = "1.2.3.4".parse().unwrap();
+    // println!("Pinging host: {:?}", ip);
+    // let timeout: u32 = 100;
+    // println!("Timeout: {:?}", timeout);
+    // let success_ping = ping_host_syscmd(ip, timeout, true).await;
+    // println!("Status ping {:?} : {:?}", ip, success_ping);
 
-    // // Test IP Range splitting
-    // let ip_start = "192.168.0.1";
-    // let ip_end = "192.168.0.254";
-    // let ip_ranges = split_ip_range(ip_start, ip_end, 10);
+    // Test IP Range splitting
+    let ip_start = "192.168.0.1";
+    let ip_end = "192.168.0.254";
+    let ip_ranges = split_ip_range(ip_start, ip_end, 10);
     // for range in ip_ranges.clone() {
     //     println!("IP Range: {:?}", range);
     // }
 
-    // // Test IP Range creation on the first range
+    // Test IP Range creation on the first range
     // let ip_list = create_ip_from_range(ip_ranges.clone().into_iter().nth(0).unwrap());
     // for ip in ip_list.clone() {
     //     println!("IP: {:?}", ip);
@@ -116,38 +115,38 @@ async fn main() {
 
 
 
-    // // Test concurrency with tokio
-    // let shared_map = Arc::new(Mutex::new(HashMap::new()));
-    // let mut tasks = vec![];
-    // for range in ip_ranges {
-    //     // Generate IPs for the current range
-    //     let ip_to_check = create_ip_from_range(range);
-    //     let map = Arc::clone(&shared_map);
+    // Test concurrency with tokio
+    let shared_vector = Arc::new(Mutex::new(Vec::new()));
+    let mut tasks = vec![];
+    for range in ip_ranges {
+        // Generate IPs for the current range
+        let ip_to_check = create_ip_from_range(range);
+        let vector = Arc::clone(&shared_vector);
 
-    //     // Spawn a new async task for each IP range
-    //     let task = task::spawn(async move {
-    //         for ip_addr in ip_to_check {
-    //             let ip: IpAddr = ip_addr.parse().unwrap();
-    //             let timeout: u32 = 100;
+        // Spawn a new async task for each IP range
+        let task = task::spawn(async move {
+            for ip_addr in ip_to_check {
+                let ip: IpAddr = ip_addr.parse().unwrap();
+                let timeout: u32 = 100;
 
-    //             // Call the async ping function
-    //             let success_ping = ping_host_syscmd(ip, timeout, false).await;
-    //             println!("Status ping {:?} : {:?}", ip, success_ping);
+                // Call the async ping function
+                let ping_result = ping_host_syscmd(ip, timeout, false).await;
+                println!("Status ping {:?} : {:?}", ip, ping_result.status);
 
-    //             // Lock the map to write the result
-    //             let mut locked_map = map.lock().unwrap();
-    //             locked_map.insert(ip.to_string(), success_ping);
-    //         }
-    //     });
+                // Lock the vector to write the result
+                let mut locked_vector = vector.lock().unwrap();
+                locked_vector.push(ping_result);
+            }
+        });
 
-    //     tasks.push(task);
-    // }
+        tasks.push(task);
+    }
 
-    // // Wait for all async tasks to finish
-    // join_all(tasks).await;
+    // Wait for all async tasks to finish
+    join_all(tasks).await;
 
-    // // Print the results
-    // let locked_map = shared_map.lock().unwrap();
-    // println!("Results: {:?}", *locked_map);
+    // Print the results
+    let locked_vector = shared_vector.lock().unwrap();
+    println!("Results: {:?}", *locked_vector);
 
 }
