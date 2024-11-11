@@ -1,5 +1,6 @@
 mod network;
-use crate::network::network_core::{analyse_interfaces, ping_host_syscmd, split_ip_range, create_ip_from_range};
+use crate::network::network_core::{analyse_interfaces, ping_host_syscmd};
+use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -8,7 +9,7 @@ use std::thread;
 
 fn main() {
 
-    analyse_interfaces();
+    // analyse_interfaces();
 
     // // DOES NOT WORK
     // let active_hosts = scan_interfaces();
@@ -23,11 +24,13 @@ fn main() {
     // let success_ping = ping_host_syscmd(ip, timeout);
     // println!("Status ping {:?} : {:?}", ip, success_ping);
 
-    // // Test IP Range splitting
-    // let ip_start = "192.168.0.1";
-    // let ip_end = "192.168.0.254";
-    // let ip_ranges = split_ip_range(ip_start, ip_end, 10);
-    // println!("IP Ranges: {:?}", ip_ranges);
+    // Test IP Range splitting
+    let ip_start = "192.168.0.1";
+    let ip_end = "192.168.0.254";
+    let ip_ranges = split_ip_range(ip_start, ip_end, 10);
+    for range in ip_ranges.clone() {
+        println!("IP Range: {:?}", range);
+    }
 
     // // Test IP Range creation
     // let ip_list = create_ip_from_range(ip_ranges.clone().into_iter().nth(0).unwrap());
