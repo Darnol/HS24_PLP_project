@@ -29,7 +29,7 @@ pub fn analyse_interfaces() -> () {
     }
 }
 
-pub fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> bool {
+pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> bool {
 
     // ip to String
     let ip_str = ip.to_string();
