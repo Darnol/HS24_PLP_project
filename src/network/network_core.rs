@@ -8,10 +8,11 @@ use std::time::Duration;
 use std::collections::HashSet;
 use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, TcpStream};
+use dns_lookup::lookup_addr;
 
 const TCP_PORTS: [u16; 10] = [20,21,22,23,25,53,80,110,143,443];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Status {
     Up,
     Down,
@@ -21,15 +22,17 @@ pub enum Status {
 pub struct PortScanResult {
     pub ip_address: Ipv4Addr,
     pub status: Status,
+    pub hostname: Option<String>, // Only populated if the device is "up"
     pub open_ports: Option<Vec<u16>>, // Only populated if the device is "up"
 }
 
 impl PortScanResult {
-    fn new(ip_address: Ipv4Addr, status: Status, open_ports: Option<Vec<u16>>) -> Self {
+    fn new(ip_address: Ipv4Addr, status: Status, hostname: Option<String>, open_ports: Option<Vec<u16>>) -> Self {
         PortScanResult {
             ip_address,
-            status,
-            open_ports,
+            status: status.clone(),
+            hostname: if let Status::Up = status { hostname } else { None },
+            open_ports: if let Status::Up = status { open_ports } else { None },
         }
     }
 }
@@ -113,14 +116,21 @@ pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> PortS
         if verboose {
             println!("Ping successful");
         }
+
+        // Get hostname
+        let hostname = match lookup_addr(&ip) {
+            Ok(name) => name,
+            Err(_) => String::from("Unknown"),
+        };
+
         // Scan common TCP ports
         let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(100), &TCP_PORTS);
-        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, Some(open_ports));
+        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, Some(hostname), Some(open_ports));
     } else {
         if verboose {
             println!("Ping failed");
         }
-        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, None);
+        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, None, None);
     }
 }
 
@@ -141,50 +151,4 @@ pub fn scan_ports_tcp(ip: IpAddr, timeout: Duration, ports: &[u16]) -> Vec<u16> 
     }
 
     open_ports
-}
-
-pub fn scan_interfaces() -> HashSet<String> {
-    
-    // All interfaces
-    let interfaces = datalink::interfaces();
-
-    // Filter out loopback interfaces
-    let interfaces_no_loopback: Vec<NetworkInterface> = interfaces.into_iter()
-        .filter(|iface| !iface.is_loopback())
-        .filter(|iface| iface.name == "\\Device\\NPF_{2573BF24-C0DC-4565-A709-8D6EC53FC892}") // single out working interface
-        .collect();
-
-    let mut active_hosts = HashSet::new();
-
-    for interface in interfaces_no_loopback {
-        // Scan the single interface
-        println!("Scanning interface: {}", interface.name);
-
-        match datalink::channel(&interface, Default::default()).expect("Failed to create datalink channel") {
-            Channel::Ethernet(_, mut rx) => {
-                println!("Channel type: Ethernet");
-
-                let mut packet_count = 0;
-                const MAX_PACKETS: u32 = 10;
-
-                while let Ok(packet) = rx.next() {
-                    packet_count += 1;
-                    println!("Received packet number: {:?}", packet_count);
-
-                    if let Some(ipv4_packet) = Ipv4Packet::new(packet) {
-                        println!("From {} to {}", ipv4_packet.get_source(), ipv4_packet.get_destination());
-                    }
-
-                    if packet_count >= MAX_PACKETS {
-                        break;
-                    }
-                }
-            }
-            _ => {
-                eprintln!("Unsupported channel type");
-            }
-        }
-    }
-
-    active_hosts
 }
