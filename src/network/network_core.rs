@@ -65,8 +65,6 @@ fn determine_ping_parameters() -> (String, String) {
 }
 
 pub fn analyse_interfaces() -> () {
-    println!("Showing interfaces");
-
     // All interfaces
     let interfaces = datalink::interfaces();
 
@@ -88,7 +86,7 @@ pub fn analyse_interfaces() -> () {
     }
 }
 
-pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> PortScanResult {
+pub async fn ping_host_syscmd(ip: Ipv4Addr, timeout: u32, verboose: bool) -> PortScanResult {
 
     // ip to String
     let ip_str = ip.to_string();
@@ -118,7 +116,7 @@ pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> PortS
         }
 
         // Get hostname
-        let hostname = match lookup_addr(&ip) {
+        let hostname = match lookup_addr(&IpAddr::from(ip)) {
             Ok(name) => name,
             Err(_) => String::from("Unknown"),
         };
@@ -134,7 +132,7 @@ pub async fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> PortS
     }
 }
 
-pub fn scan_ports_tcp(ip: IpAddr, timeout: Duration, ports: &[u16]) -> Vec<u16> {
+pub fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> Vec<u16> {
     let mut open_ports: Vec<u16> = Vec::new();
 
     for port in ports {

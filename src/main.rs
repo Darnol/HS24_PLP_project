@@ -5,62 +5,124 @@ mod network;
 use crate::network::network_core::{analyse_interfaces, ping_host_syscmd, scan_ports_tcp};
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
+use std::str::FromStr;
 use std::time::Duration;
-use std::net::{IpAddr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use tokio::task;
 use futures::future::join_all;
 
-const TCP_PORTS: [u16; 10] = [20,21,22,23,25,53,80,110,143,443];
+use clap::{Parser, ArgAction};
+
+#[derive(Parser)]
+struct Cli {
+    /// The pattern to look for
+    ip_from: String,
+    ip_to: Option<String>,
+    #[arg(short, long)]
+    timeout: Option<u32>,
+    #[arg(short, long, action = ArgAction::SetTrue)]
+    verboose: bool,
+}
+
 
 #[tokio::main]
 async fn main() {
 
-    // analyse_interfaces();
+    let args = Cli::parse();
 
-    // // DOES NOT WORK
-    // let active_hosts = scan_interfaces();
-    // println!("Active hosts: {:?}", active_hosts);
+    let mut do_range: bool = false;
 
-    // Test ping
-    // let ip: IpAddr = "1.1.1.1".parse().unwrap();
-    // let ip: IpAddr = "8.8.8.8".parse().unwrap();
-    let ip: IpAddr = "198.252.206.16".parse().unwrap(); // Stackoverflow
-    // let ip: IpAddr = "1.2.3.4".parse().unwrap();
-    println!("Pinging host: {:?}", ip);
-    let timeout: u32 = 100;
-    println!("Timeout: {:?}", timeout);
-    let success_ping = ping_host_syscmd(ip, timeout, true).await;
-    println!("Status ping {:?} : {:?}", ip, success_ping);
+    // Set timeout
+    let timeout: u32 = match args.timeout {
+        Some(timeout) => timeout,
+        None => 100,
+    };
+
+    // First check IP from
+    let ip_from: Ipv4Addr = match args.ip_from.parse() {
+        Ok(ip) => ip,
+        Err(_) => {
+            eprintln!("Error: {} is not a valid IPv4 address.", args.ip_from);
+            return;
+        }
+    };
+
+    // Check IP to
+    let ip_to: Option<Ipv4Addr> = match args.ip_to {
+        Some(ref ip_to) => {
+
+            // Check if the IP to is valid
+            let _: Ipv4Addr = match ip_to.parse() {
+                Ok(ip) => ip,
+                Err(_) => {
+                    eprintln!("Error: {} is not a valid IPv4 address.", ip_to);
+                    return;
+                }
+            };
+
+            // Check if the range is valid
+            let ip_to: Ipv4Addr = ip_to.parse().unwrap();
+            if ip_from >= ip_to {
+                println!("Invalid IP Range: {:?} to {:?}. Make sure ip_from is logically smaller than ip_to", ip_from, ip_to);
+                return;
+            }
+
+            println!("IP Range: {:?} to {:?} ; verboose {:?}", args.ip_from, ip_to, args.verboose);
+            do_range = true;
+            Some(ip_to)
+        },
+        None => {
+            println!("IP Single: {:?} ; verboose {:?}", args.ip_from, args.verboose);
+            None
+        }
+    };
+    println!("--------------------------------------------------------------------------------------------------------------------------------");
+    
+    println!("Analyse interfaces ...");
+    analyse_interfaces();
+    println!("--------------------------------------------------------------------------------------------------------------------------------");
+
+
+    if !do_range {
+        println!("Scanning single IP {:?}", ip_from);
+
+        let success_ping = ping_host_syscmd(ip_from, timeout, true).await;
+        println!("Status ping {:?} : {:?}", ip_from, success_ping);
+    } else {
+        // TODO: Handle IP Range
+        // Split Range
+        // Execute concurrently
+        // Gather results and print them nicely
+    }
+
+
+    
+    // // Test ping
+    // // let ip: IpAddr = "1.1.1.1".parse().unwrap();
+    // // let ip: IpAddr = "8.8.8.8".parse().unwrap();
+    // let ip: IpAddr = "198.252.206.16".parse().unwrap(); // Stackoverflow
+    // // let ip: IpAddr = "1.2.3.4".parse().unwrap();
+    // println!("Pinging host: {:?}", ip);
+    // let timeout: u32 = 100;
+    // println!("Timeout: {:?}", timeout);
+    // let success_ping = ping_host_syscmd(ip, timeout, true).await;
+    // println!("Status ping {:?} : {:?}", ip, success_ping);
 
     // // Test IP Range splitting
     // let ip_start = "192.168.0.1";
     // let ip_end = "192.168.0.254";
     // let ip_ranges = split_ip_range(ip_start, ip_end, 10);
-    // for range in ip_ranges.clone() {
-    //     println!("IP Range: {:?}", range);
-    // }
+    // // for range in ip_ranges.clone() {
+    // //     println!("IP Range: {:?}", range);
+    // // }
 
-    // Test IP Range creation on the first range
+    // // Test IP Range creation on the first range
     // let ip_list = create_ip_from_range(ip_ranges.clone().into_iter().nth(0).unwrap());
-    // for ip in ip_list.clone() {
-    //     println!("IP: {:?}", ip);
-    // }
-
-
-
-    // // Test TCP Port scanning
-    // // let ip: IpAddr = "35.180.139.74".parse().unwrap();
-    // let ip: IpAddr = "1.1.1.1".parse().unwrap();
-    // let timeout: Duration = Duration::from_millis(1000);
-    // let open_ports: Vec<u16> = scan_ports_tcp(ip, timeout, &TCP_PORTS);
-    // println!("Open ports: {:?}", open_ports);
-
-
-
-
+    // // for ip in ip_list.clone() {
+    // //     println!("IP: {:?}", ip);
+    // // }
 
     // // Test running sequentially
     // let ips_to_ping = create_ip_from_range( (String::from("192.168.0.1"), String::from("192.168.0.254")) );
@@ -72,49 +134,6 @@ async fn main() {
     //     println!("Status ping {:?} : {:?}", ip, success_ping);
     //     results_concurrent.insert(ip.to_string(), success_ping);
     // }
-
-
-
-
-    // // Test concurrency with threads
-    // let shared_map = Arc::new(Mutex::new(HashMap::new()));
-    // let mut handles = vec![]; // This holds the handles, which are separate threads
-    // for range in ip_ranges {
-
-    //     let ip_to_check = create_ip_from_range(range);
-        
-    //     let map = Arc::clone(&shared_map);
-
-    //     // Spawn a new thread for each IP range
-    //     let handle = thread::spawn(move || {
-
-    //         // Each threads will loop through IP addresses
-    //         for ip_addr in ip_to_check {
-    //             let ip: IpAddr = ip_addr.parse().unwrap();
-    //             let timeout: u32 = 100;
-    //             let success_ping = ping_host_syscmd(ip, timeout, false);
-    //             println!("Status ping {:?} : {:?}", ip, success_ping);
-
-    //             // Lock the map to write the result
-    //             let mut locked_map = map.lock().unwrap();
-    //             locked_map.insert(ip.to_string(), success_ping);
-    //         }
-            
-    //     });
-
-    //     handles.push(handle);
-    // }
-
-    // // Wait for all threads to finish
-    // for handle in handles {
-    //     handle.join().unwrap();
-    // }
-
-    // // Print the results
-    // let locked_map = shared_map.lock().unwrap();
-    // println!("Results: {:?}", *locked_map);
-
-
 
 
     // // Test concurrency with tokio
