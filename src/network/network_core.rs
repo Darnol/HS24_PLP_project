@@ -29,24 +29,29 @@ pub fn analyse_interfaces() -> () {
     }
 }
 
-pub fn ping_host_syscmd(ip: IpAddr, timeout: u32) -> u32 {
+pub fn ping_host_syscmd(ip: IpAddr, timeout: u32, verboose: bool) -> bool {
 
     // ip to String
     let ip_str = ip.to_string();
 
-    println!("ping ip {}", ip_str);
+    if verboose {
+        println!("Pinging host: {:?}", ip);
+        println!("Timeout: {:?}", timeout);
+    }
 
     // Determine OS
-    if cfg!(target_os = "windows") {
-        println!("Windows OS detected");
-
+    if cfg!(target_os = "windows") { 
+        
         let command = format!(
             "ping {} -n 4 -w {} >nul && exit 0 || exit 1",
             ip_str,
             timeout
         );
-
-        println!("Command: {}", command);
+       
+        if verboose {
+            println!("Windows OS detected");
+            println!("Command: {}", command);
+        }
 
         let status = Command::new("cmd")
             .args(["/C", &command])
@@ -54,22 +59,28 @@ pub fn ping_host_syscmd(ip: IpAddr, timeout: u32) -> u32 {
             .expect("Failed to execute command");
 
         if status.success() {
-            println!("Ping successful");
-            return 0;
+            if verboose {
+                println!("Ping successful");
+            }
+            return true;
         } else {
-            println!("Ping failed");
-            return 1;
+            if verboose {
+                println!("Ping failed");
+            }
+            return false;
         }
 
     } else if cfg!(target_os = "macos") {
-        println!("Mac OS detected");
-
+        
         let command = format!(
             "ping -c 2 {} >/dev/null && exit 0 || exit 1",
             ip_str
         );
-
-        println!("Command: {}", command);
+        
+        if verboose {
+            println!("Mac OS detected");
+            println!("Command: {}", command);
+        }
 
         let status = Command::new("sh")
             .args(["-c", &command])
@@ -77,44 +88,20 @@ pub fn ping_host_syscmd(ip: IpAddr, timeout: u32) -> u32 {
             .expect("Failed to execute command");
 
         if status.success() {
-            println!("Ping successful");
-            return 0;
+            if verboose {
+                println!("Ping successful");
+            }
+            return true;
         } else {
-            println!("Ping failed");
-            return 1;
+            if verboose {
+                println!("Ping failed");
+            }
+            return false;
         }        
 
     } else {
         panic!("Unsupported OS detected");
     }
-}
-
-pub fn split_ip_range(start_ip: &str, end_ip: &str, chunks: usize) -> Vec<(String, String)> {
-    let start: std::net::Ipv4Addr = start_ip.parse().unwrap();
-    let end: std::net::Ipv4Addr = end_ip.parse().unwrap();
-    
-    let mut ranges = vec![];
-    let total_ips = (u32::from(end) - u32::from(start)) + 1;
-    
-    if chunks>total_ips as usize {
-        panic!("Chunks cannot be greater than total IPs");
-    }
-    
-    let chunk_size = (total_ips / chunks as u32) as usize;
-    
-    let mut current_ip = start;
-    
-    while current_ip < end {
-        if u32::from(end) - u32::from(current_ip) < chunk_size as u32 {
-            ranges.push((current_ip.to_string(), end.to_string()));
-            break;
-        }
-        let next_ip = std::net::Ipv4Addr::from(u32::from(current_ip) + chunk_size as u32);
-        ranges.push((current_ip.to_string(), next_ip.to_string()));
-        current_ip = std::net::Ipv4Addr::from(u32::from(next_ip) + 1);
-    }
-    
-    ranges
 }
 
 pub fn scan_interfaces() -> HashSet<String> {
