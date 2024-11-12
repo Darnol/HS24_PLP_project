@@ -14,13 +14,13 @@ use serde::{Serialize, Deserialize};
 
 const TCP_PORTS: [u16; 10] = [20,21,22,23,25,53,80,110,143,443];
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Status {
     Up,
     Down,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PortScanResult {
     pub ip_address: Ipv4Addr,
     pub status: Status,

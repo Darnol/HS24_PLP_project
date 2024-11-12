@@ -67,7 +67,7 @@ async fn main() {
             // Check if the range is valid
             let ip_to: Ipv4Addr = ip_to.parse().unwrap();
             if ip_from >= ip_to {
-                println!("Invalid IP Range: {:?} to {:?}. Make sure ip_from is logically smaller than ip_to", ip_from, ip_to);
+                eprintln!("Invalid IP Range: {:?} to {:?}. Make sure ip_from is logically smaller than ip_to", ip_from, ip_to);
                 return;
             }
 
@@ -80,11 +80,11 @@ async fn main() {
             None
         }
     };
-    println!("--------------------------------------------------------------------------------------------------------------------------------");
+    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
     
     println!("Analyse interfaces ...");
     analyse_interfaces();
-    println!("--------------------------------------------------------------------------------------------------------------------------------");
+    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
 
 
     if !do_range {
@@ -133,7 +133,7 @@ async fn main() {
                     let mut locked_vector = vector.lock().unwrap();
                     locked_vector.push(ping_result);
                     // Lock pb and increment
-                    let mut pb = pb.lock().unwrap();
+                    let pb = pb.lock().unwrap();
                     pb.inc(1);
                 }
             });
@@ -143,8 +143,40 @@ async fn main() {
         // Wait for all async tasks to finish
         join_all(tasks).await;
         // Print the results
-        let locked_vector = shared_vector.lock().unwrap();
-        println!("Results: {:?}", *locked_vector);
+        let mut locked_vector = shared_vector.lock().unwrap();
+        
+        // Pretty print the results
+        // Sort by IP
+        locked_vector.sort_by(|a, b| a.ip_address.cmp(&b.ip_address));
+
+        // Gather information about how many IP scanned, how many are up etc
+        let n_total: u32 = locked_vector.len() as u32;
+        let mut n_up: u32 = 0;
+        locked_vector.iter().for_each(|result| {
+            if result.status == network::network_core::Status::Up {
+                n_up += 1;
+            }
+        });
+
+        println!("--------------------------------------------------------------------------------------------------------------------------------\n");
+        println!("RESULTS:");
+        println!("Total IPs scanned: {}", n_total);
+        println!("IPs UP: {}", n_up);
+        
+        println!("--------------------------------------------------------------------------------------------------------------------------------\n");
+        println!("IPs UP:");
+        for result in locked_vector.iter() {
+            if result.status == network::network_core::Status::Up {
+                println!("IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open Ports: {:?}", result.ip_address, result.status, result.hostname, result.open_ports);
+            }
+        };
+
+        println!("\nIPs DOWN:");
+        for result in locked_vector.iter() {
+            if result.status == network::network_core::Status::Down {
+                println!("IP: {:?} ; Status: {:?}", result.ip_address, result.status);
+            }
+        };
     }
 
 
