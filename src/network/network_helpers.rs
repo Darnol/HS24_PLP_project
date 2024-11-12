@@ -18,24 +18,21 @@ pub fn create_ip_from_range(range_ip: (String, String)) -> Vec<String> {
     ip_list
 }
 
-pub fn split_ip_range(start_ip: &str, end_ip: &str, chunks: usize) -> Vec<(String, String)> {
-    let start: Ipv4Addr = start_ip.parse().unwrap();
-    let end: Ipv4Addr = end_ip.parse().unwrap();
-    
+pub fn split_ip_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr, chunks: usize) -> Vec<(String, String)> {
     let mut ranges = vec![];
-    let total_ips = (u32::from(end) - u32::from(start)) + 1;
-    
+    let total_ips = (u32::from(end_ip) - u32::from(start_ip)) + 1;
+
     if chunks>total_ips as usize {
         panic!("Chunks cannot be greater than total IPs");
     }
     
     let chunk_size = (total_ips / chunks as u32) as usize;
     
-    let mut current_ip = start;
+    let mut current_ip = start_ip;
     
-    while current_ip < end {
-        if u32::from(end) - u32::from(current_ip) < chunk_size as u32 {
-            ranges.push((current_ip.to_string(), end.to_string()));
+    while current_ip < end_ip {
+        if u32::from(end_ip) - u32::from(current_ip) < chunk_size as u32 {
+            ranges.push((current_ip.to_string(), end_ip.to_string()));
             break;
         }
         let next_ip = Ipv4Addr::from(u32::from(current_ip) + chunk_size as u32);

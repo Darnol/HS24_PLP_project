@@ -87,14 +87,44 @@ async fn main() {
 
     if !do_range {
         println!("Scanning single IP {:?}", ip_from);
-
+        
         let success_ping = ping_host_syscmd(ip_from, timeout, true).await;
         println!("Status ping {:?} : {:?}", ip_from, success_ping);
     } else {
-        // TODO: Handle IP Range
-        // Split Range
-        // Execute concurrently
-        // Gather results and print them nicely
+
+        let ip_to = ip_to.unwrap();
+        
+        println!("Scanning IP Range {:?} to {:?}", &ip_from.to_string(),ip_to.to_string());
+
+        // Split IP Range
+        let ip_ranges = split_ip_range(ip_from, ip_to, 10);
+
+        // Run concurrently
+        let shared_vector = Arc::new(Mutex::new(Vec::new()));
+        let mut tasks = vec![];
+        for range in ip_ranges {
+            // Generate IPs for the current range
+            let ip_to_check = create_ip_from_range(range);
+            let vector = Arc::clone(&shared_vector);
+            // Spawn a new async task for each IP range
+            let task = task::spawn(async move {
+                for ip_addr in ip_to_check {
+                    let ip: Ipv4Addr = ip_addr.parse().unwrap();
+                    // Call the async ping function
+                    let ping_result = ping_host_syscmd(ip, timeout, false).await;
+                    // Lock the vector to write the result
+                    let mut locked_vector = vector.lock().unwrap();
+                    locked_vector.push(ping_result);
+                }
+            });
+
+            tasks.push(task);
+        }
+        // Wait for all async tasks to finish
+        join_all(tasks).await;
+        // Print the results
+        let locked_vector = shared_vector.lock().unwrap();
+        println!("Results: {:?}", *locked_vector);
     }
 
 
