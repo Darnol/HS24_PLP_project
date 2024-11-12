@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
+use serde::{Serialize, Deserialize};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::task;
@@ -91,6 +92,13 @@ async fn main() {
         
         let success_ping = ping_host_syscmd(ip_from, timeout, true).await;
         println!("Status ping {:?} : {:?}", ip_from, success_ping);
+
+        // // Test serializing and deserializing
+        // let serialized = serde_json::to_string(&success_ping).unwrap();
+        // println!("Serialized: {:?}", serialized);
+        // let deserialized: network::network_core::PortScanResult = serde_json::from_str(&serialized).unwrap();
+        // println!("Deserialized: {:?}", deserialized);
+
     } else {
 
         let ip_to = ip_to.unwrap();

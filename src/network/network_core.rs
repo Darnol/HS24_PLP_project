@@ -10,15 +10,17 @@ use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, TcpStream};
 use dns_lookup::lookup_addr;
 
+use serde::{Serialize, Deserialize};
+
 const TCP_PORTS: [u16; 10] = [20,21,22,23,25,53,80,110,143,443];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Status {
     Up,
     Down,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PortScanResult {
     pub ip_address: Ipv4Addr,
     pub status: Status,
