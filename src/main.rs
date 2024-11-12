@@ -10,6 +10,7 @@ use std::time::Duration;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 
+use indicatif::{ProgressBar, ProgressStyle};
 use tokio::task;
 use futures::future::join_all;
 
@@ -97,7 +98,14 @@ async fn main() {
         println!("Scanning IP Range {:?} to {:?}", &ip_from.to_string(),ip_to.to_string());
 
         // Split IP Range
-        let ip_ranges = split_ip_range(ip_from, ip_to, 10);
+        let (ip_ranges, n_ips) = split_ip_range(ip_from, ip_to, 10);
+
+        let progress_bar = Arc::new(Mutex::new(ProgressBar::new(n_ips as u64)));
+        progress_bar.lock().unwrap().set_style(
+            ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta})")
+                .expect("Invalid template format"),
+        );
 
         // Run concurrently
         let shared_vector = Arc::new(Mutex::new(Vec::new()));
@@ -106,6 +114,7 @@ async fn main() {
             // Generate IPs for the current range
             let ip_to_check = create_ip_from_range(range);
             let vector = Arc::clone(&shared_vector);
+            let pb = Arc::clone (&progress_bar);
             // Spawn a new async task for each IP range
             let task = task::spawn(async move {
                 for ip_addr in ip_to_check {
@@ -115,6 +124,9 @@ async fn main() {
                     // Lock the vector to write the result
                     let mut locked_vector = vector.lock().unwrap();
                     locked_vector.push(ping_result);
+                    // Lock pb and increment
+                    let mut pb = pb.lock().unwrap();
+                    pb.inc(1);
                 }
             });
 

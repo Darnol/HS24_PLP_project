@@ -18,7 +18,7 @@ pub fn create_ip_from_range(range_ip: (String, String)) -> Vec<String> {
     ip_list
 }
 
-pub fn split_ip_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr, chunks: usize) -> Vec<(String, String)> {
+pub fn split_ip_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr, chunks: usize) -> (Vec<(String, String)>, u32) {
     let mut ranges = vec![];
     let total_ips = (u32::from(end_ip) - u32::from(start_ip)) + 1;
 
@@ -40,5 +40,5 @@ pub fn split_ip_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr, chunks: usize) -> Ve
         current_ip = Ipv4Addr::from(u32::from(next_ip) + 1);
     }
     
-    ranges
+    (ranges, total_ips)
 }
