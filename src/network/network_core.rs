@@ -12,7 +12,7 @@ use dns_lookup::lookup_addr;
 
 use serde::{Serialize, Deserialize};
 
-const TCP_PORTS: [u16; 10] = [20,21,22,23,25,53,80,110,143,443,445];
+const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Status {

@@ -122,7 +122,7 @@ async fn main() {
             // Generate IPs for the current range
             let ip_to_check = create_ip_from_range(range);
             let vector = Arc::clone(&shared_vector);
-            let pb = Arc::clone (&progress_bar);
+            let pb = Arc::clone(&progress_bar);
             // Spawn a new async task for each IP range
             let task = task::spawn(async move {
                 for ip_addr in ip_to_check {
