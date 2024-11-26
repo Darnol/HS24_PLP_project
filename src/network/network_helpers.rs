@@ -19,15 +19,16 @@ pub fn create_ip_from_range(range_ip: (String, String)) -> Vec<String> {
 }
 
 // TODO: Chunks > than total ips -> handle that
-pub fn split_ip_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr, chunks: usize) -> (Vec<(String, String)>, u32) {
+pub fn split_ip_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr, chunksize: usize) -> (Vec<(String, String)>, u32) {
     let mut ranges = vec![];
     let total_ips = (u32::from(end_ip) - u32::from(start_ip)) + 1;
 
-    if chunks>total_ips as usize {
-        panic!("Chunks cannot be greater than total IPs");
+    if chunksize > total_ips as usize {
+        // If the chunk size is larger than the total number of IPs, just return the whole range
+        ranges.push((start_ip.to_string(), end_ip.to_string()));
     }
     
-    let chunk_size = (total_ips / chunks as u32) as usize;
+    let chunk_size = (total_ips / chunksize as u32) as usize;
     
     let mut current_ip = start_ip;
     

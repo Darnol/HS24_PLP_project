@@ -22,8 +22,10 @@ struct Cli {
     /// The pattern to look for
     ip_from: Option<String>,
     ip_to: Option<String>,
-    #[arg(short, long)]
-    timeout: Option<u32>,
+    #[arg(short, long, default_value_t=100)]
+    timeout: u32,
+    #[arg(short, long, default_value_t=100)]
+    chunksize: usize,
     #[arg(short, long, action = ArgAction::SetTrue)]
     verboose: bool,
 }
@@ -59,11 +61,8 @@ async fn main() {
 
     let mut do_range: bool = false;
 
-    // Set timeout
-    let timeout: u32 = match args.timeout {
-        Some(timeout) => timeout,
-        None => 100,
-    };
+    let timeout = args.timeout;
+    let chunksize = args.chunksize;
 
     // Always analyse network interfaces
     println!("--------------------------------------------------------------------------------------------------------------------------------\n");
@@ -129,7 +128,7 @@ async fn main() {
         println!("Scanning IP Range {:?} to {:?}", &ip_from.to_string(),ip_to.to_string());
 
         // Split IP Range
-        let (ip_ranges, n_ips) = split_ip_range(ip_from, ip_to, 10);
+        let (ip_ranges, n_ips) = split_ip_range(ip_from, ip_to, chunksize);
 
         let progress_bar = Arc::new(Mutex::new(ProgressBar::new(n_ips as u64)));
         progress_bar.lock().unwrap().set_style(

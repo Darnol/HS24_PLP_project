@@ -86,7 +86,7 @@ pub fn analyse_interfaces() -> () {
             format!("Interface: {}", interface.name)
         };
 
-        println!("Interface: {:?}", interface_text);
+        println!("{}", interface_text);
 
         // Print the IPs of possibly relevant interfaces
         for ipv4network in interface.ips {
