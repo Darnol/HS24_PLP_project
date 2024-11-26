@@ -28,6 +28,29 @@ struct Cli {
     verboose: bool,
 }
 
+fn print_results(results: &Vec<network::network_core::PortScanResult>, n_total: u32, n_up: u32) {
+    
+    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
+    println!("RESULTS:");
+    println!("Total IPs scanned: {}", n_total);
+    println!("IPs UP: {}", n_up);
+    
+    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
+    println!("IPs UP:");
+    for result in results.iter() {
+        if result.status == network::network_core::Status::Up {
+            println!("IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open Ports: {:?}", result.ip_address, result.status, result.hostname, result.open_ports);
+        }
+    };
+
+    println!("\nIPs DOWN:");
+    for result in results.iter() {
+        if result.status == network::network_core::Status::Down {
+            println!("IP: {:?} ; Status: {:?}", result.ip_address, result.status);
+        }
+    };
+}
+
 
 #[tokio::main]
 async fn main() {
@@ -158,25 +181,8 @@ async fn main() {
             }
         });
 
-        println!("--------------------------------------------------------------------------------------------------------------------------------\n");
-        println!("RESULTS:");
-        println!("Total IPs scanned: {}", n_total);
-        println!("IPs UP: {}", n_up);
-        
-        println!("--------------------------------------------------------------------------------------------------------------------------------\n");
-        println!("IPs UP:");
-        for result in locked_vector.iter() {
-            if result.status == network::network_core::Status::Up {
-                println!("IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open Ports: {:?}", result.ip_address, result.status, result.hostname, result.open_ports);
-            }
-        };
-
-        println!("\nIPs DOWN:");
-        for result in locked_vector.iter() {
-            if result.status == network::network_core::Status::Down {
-                println!("IP: {:?} ; Status: {:?}", result.ip_address, result.status);
-            }
-        };
+        // Print the results
+        print_results(&locked_vector, n_total, n_up);
     }
 
 
