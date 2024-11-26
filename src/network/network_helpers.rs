@@ -26,6 +26,7 @@ pub fn split_ip_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr, chunksize: usize) ->
     if chunksize > total_ips as usize {
         // If the chunk size is larger than the total number of IPs, just return the whole range
         ranges.push((start_ip.to_string(), end_ip.to_string()));
+        return (ranges, total_ips);
     }
     
     let chunk_size = (total_ips / chunksize as u32) as usize;

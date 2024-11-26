@@ -8,6 +8,7 @@ use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 use std::str::FromStr;
 use std::time::Duration;
 use std::net::{IpAddr, Ipv4Addr};
+use ipnet::Ipv4Net;
 use std::sync::{Arc, Mutex};
 use serde::{Serialize, Deserialize};
 
@@ -19,13 +20,20 @@ use clap::{Parser, ArgAction};
 
 #[derive(Parser)]
 struct Cli {
-    /// The pattern to look for
+    #[arg(help = "Either IPv4 address without subnet or CIDR notation. If ip_to not set, ip_from is scanned, otherwise range from ip_from to ip_to")]
     ip_from: Option<String>,
+    
+    #[arg(help = "If ip_from is a IPv4 address, this is the end of the range. Must be greater than ip_from")]
     ip_to: Option<String>,
+    
+    #[arg(help = "Timeout in milliseconds. Defaults to 100")]
     #[arg(short, long, default_value_t=100)]
     timeout: u32,
-    #[arg(short, long, default_value_t=100)]
+    
+    #[arg(help = "If IP range is specified, number of IP addresses each worker receives. Defaults to 10")]
+    #[arg(short, long, default_value_t=10)]
     chunksize: usize,
+    
     #[arg(short, long, action = ArgAction::SetTrue)]
     verboose: bool,
 }
@@ -41,7 +49,13 @@ fn print_results(results: &Vec<network::network_core::PortScanResult>, n_total: 
     println!("IPs UP:");
     for result in results.iter() {
         if result.status == network::network_core::Status::Up {
-            println!("IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open Ports: {:?}", result.ip_address, result.status, result.hostname.as_ref().unwrap(), result.open_ports);
+            println!(
+                "IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open TCP Ports: {:?}",
+                result.ip_address,
+                result.status,
+                result.hostname.as_ref().unwrap(),
+                result.open_ports.as_ref().unwrap(),
+            );
         }
     };
 
@@ -76,38 +90,75 @@ async fn main() {
         return
     }
 
-    // First unwrap the IP from addres. Error if not IPv4 valid
-    let ip_from = args.ip_from.expect("IP from must be supplied").parse().unwrap();
+    // Unwrap the ip_from into str
+    let ip_from_string: String = args.ip_from.expect("IP from must be supplied");
+    println!("{}", ip_from_string);
 
-    // Check IP to
-    let ip_to: Option<Ipv4Addr> = match args.ip_to {
-        Some(ref ip_to) => {
+    let ip_from: Ipv4Addr;
+    let ip_to: Option<Ipv4Addr>;
 
-            // Check if the IP to is valid
-            let _: Ipv4Addr = match ip_to.parse() {
-                Ok(ip) => ip,
-                Err(_) => {
-                    eprintln!("Error: {} is not a valid IPv4 address.", ip_to);
-                    return;
+    // First unwrap the IP from address. It can be either a single IPv4 address or a pnet::Ipv4Net
+    // Parse the input into either Ipv4Addr or Ipv4Net
+    match ip_from_string.parse::<Ipv4Addr>() {
+        Ok(ipv4_addr) => {
+            // Handle the single IP case
+            println!("Parsed as Ipv4Addr: {}", ipv4_addr);
+
+            // Assign the value
+            ip_from = ipv4_addr;
+            println!("Assigned ip_from: {}", ip_from);
+
+            // Check IP to
+            match args.ip_to {
+                Some(ip_to) => {
+
+                    // Check if the IP to is valid
+                    let _: Ipv4Addr = match ip_to.parse() {
+                        Ok(ip) => ip,
+                        Err(_) => {
+                            eprintln!("Error: {} is not a valid IPv4 address.", ip_to);
+                            return;
+                        }
+                    };
+
+                    // Check if the range is valid
+                    let ip_to: Ipv4Addr = ip_to.parse().unwrap();
+                    if ip_from >= ip_to {
+                        eprintln!("Invalid IP Range: {:?} to {:?}. Make sure ip_from is logically smaller than ip_to", ip_from, ip_to);
+                        return;
+                    }
+
+                    println!("IP Range: {:?} to {:?} ; verboose {:?}", ip_from, ip_to, args.verboose);
+                    do_range = true;
+                    Some(ip_to)
+                },
+                None => {
+                    println!("IP Single: {:?} ; verboose {:?}", ip_from, args.verboose);
+                    None
                 }
             };
-
-            // Check if the range is valid
-            let ip_to: Ipv4Addr = ip_to.parse().unwrap();
-            if ip_from >= ip_to {
-                eprintln!("Invalid IP Range: {:?} to {:?}. Make sure ip_from is logically smaller than ip_to", ip_from, ip_to);
-                return;
-            }
-
-            println!("IP Range: {:?} to {:?} ; verboose {:?}", ip_from, ip_to, args.verboose);
-            do_range = true;
-            Some(ip_to)
-        },
-        None => {
-            println!("IP Single: {:?} ; verboose {:?}", ip_from, args.verboose);
-            None
         }
-    };
+        Err(_) => match ip_from_string.parse::<Ipv4Net>() {
+            Ok(ipv4_net) => {
+                // Handle the network case
+                println!("Parsed as Ipv4Net: {}", ipv4_net);
+
+                // Extract first and last IP
+                let ips: Vec<Ipv4Addr> = ipv4_net.hosts().collect();
+                let ip_from: Ipv4Addr = ips[0];
+                let ip_to: Ipv4Addr = ips[ips.len()-1];
+
+                do_range = true;
+            }
+            Err(_) => {
+                // Handle invalid input
+                eprintln!(
+                    "Failed to parse '{}' as either Ipv4Addr or Ipv4Net",
+                    ip_from_string
+                );
+            }
+        },
+    }
     
     if !do_range {
         println!("Scanning single IP {:?}", ip_from);
@@ -122,8 +173,6 @@ async fn main() {
         // println!("Deserialized: {:?}", deserialized);
 
     } else {
-
-        let ip_to = ip_to.unwrap();
         
         println!("Scanning IP Range {:?} to {:?}", &ip_from.to_string(),ip_to.to_string());
 

@@ -133,7 +133,7 @@ pub async fn ping_host_syscmd(ip: Ipv4Addr, timeout: u32, verboose: bool) -> Por
         };
 
         // Scan common TCP ports
-        let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(100), &TCP_PORTS);
+        let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS);
         return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, Some(hostname), Some(open_ports));
     } else {
         if verboose {
