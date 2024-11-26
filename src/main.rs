@@ -20,7 +20,7 @@ use clap::{Parser, ArgAction};
 #[derive(Parser)]
 struct Cli {
     /// The pattern to look for
-    ip_from: String,
+    ip_from: Option<String>,
     ip_to: Option<String>,
     #[arg(short, long)]
     timeout: Option<u32>,
@@ -39,7 +39,7 @@ fn print_results(results: &Vec<network::network_core::PortScanResult>, n_total: 
     println!("IPs UP:");
     for result in results.iter() {
         if result.status == network::network_core::Status::Up {
-            println!("IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open Ports: {:?}", result.ip_address, result.status, result.hostname, result.open_ports);
+            println!("IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open Ports: {:?}", result.ip_address, result.status, result.hostname.as_ref().unwrap(), result.open_ports);
         }
     };
 
@@ -65,14 +65,20 @@ async fn main() {
         None => 100,
     };
 
-    // First check IP from
-    let ip_from: Ipv4Addr = match args.ip_from.parse() {
-        Ok(ip) => ip,
-        Err(_) => {
-            eprintln!("Error: {} is not a valid IPv4 address.", args.ip_from);
-            return;
-        }
-    };
+    // Always analyse network interfaces
+    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
+    println!("Analyse interfaces ...");
+    analyse_interfaces();
+    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
+
+    // If neither IP from nor IP to are set, we're done
+    if args.ip_from.is_none() && args.ip_to.is_none() {
+        println!("No IP from or to specified, we're done");
+        return
+    }
+
+    // First unwrap the IP from addres. Error if not IPv4 valid
+    let ip_from = args.ip_from.expect("IP from must be supplied").parse().unwrap();
 
     // Check IP to
     let ip_to: Option<Ipv4Addr> = match args.ip_to {
@@ -94,22 +100,16 @@ async fn main() {
                 return;
             }
 
-            println!("IP Range: {:?} to {:?} ; verboose {:?}", args.ip_from, ip_to, args.verboose);
+            println!("IP Range: {:?} to {:?} ; verboose {:?}", ip_from, ip_to, args.verboose);
             do_range = true;
             Some(ip_to)
         },
         None => {
-            println!("IP Single: {:?} ; verboose {:?}", args.ip_from, args.verboose);
+            println!("IP Single: {:?} ; verboose {:?}", ip_from, args.verboose);
             None
         }
     };
-    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
     
-    println!("Analyse interfaces ...");
-    analyse_interfaces();
-    println!("--------------------------------------------------------------------------------------------------------------------------------\n");
-
-
     if !do_range {
         println!("Scanning single IP {:?}", ip_from);
         
