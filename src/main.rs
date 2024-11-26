@@ -1,16 +1,12 @@
-#![allow(unused_imports)]
 #[allow(dead_code)]
 
 mod network;
-use crate::network::network_core::{analyse_interfaces, ping_host_syscmd, scan_ports_tcp};
+use crate::network::network_core::{analyse_interfaces, ping_host_syscmd};
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
-use std::str::FromStr;
-use std::time::Duration;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{Ipv4Addr};
 use ipnet::Ipv4Net;
 use std::sync::{Arc, Mutex};
-use serde::{Serialize, Deserialize};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::task;
@@ -36,6 +32,49 @@ struct Cli {
     
     #[arg(short, long, action = ArgAction::SetTrue)]
     verboose: bool,
+}
+
+fn parse_ip_input(ip_from: &str, ip_to: Option<String>) -> (bool, Ipv4Addr, Option<Ipv4Addr>) {
+    // Try ip_from as Ipv4Net
+    if let Ok(ipv4_net) = ip_from.parse::<Ipv4Net>() {
+        let ips: Vec<Ipv4Addr> = ipv4_net.hosts().collect();
+        let ip_from: Ipv4Addr = ips[0];
+        let ip_to: Ipv4Addr = ips[ips.len()-1];
+        println!("Parsed ip_from as CIDR: {} to {}", ip_from, ip_to);
+        return (true, ip_from, Some(ip_to));
+    }
+
+    // If not Ipv4Net, try Ipv4Addr
+    match ip_from.parse::<Ipv4Addr>() {
+        Ok(ipv4_addr) => {
+            let ip_from: Ipv4Addr = ipv4_addr;
+            println!("Parsed ip_from as Ipv4Addr: {}", ip_from);
+
+            // Now check if ip_to is set and valid
+            if let Some(ip_to) = ip_to {
+                match ip_to.parse::<Ipv4Addr>() {
+                    Ok(ipv4_addr) => {
+                        println!("Parsed ip_to as Ipv4Addr: {}", ipv4_addr);
+                        let ip_to: Ipv4Addr = ipv4_addr;
+                        if ip_from >= ip_to {
+                            panic!("Invalid IP Range: {:?} to {:?}. Make sure ip_from is logically smaller than ip_to", ip_from, ip_to);
+                        }
+                        return (true, ip_from, Some(ip_to));
+                    },
+                    Err(_) => {
+                        panic!("Failed to parse ip_to '{}' as Ipv4Addr", ip_to);
+                    }
+                }
+            } else {
+                return (false, ip_from, None);
+            }
+            
+        }
+        Err(_) => {
+            // Handle invalid input ip_form
+            panic!("Failed to parse ip_from '{}' as either Ipv4Addr or Ipv4Net",ip_from);
+        }
+    }
 }
 
 fn print_results(results: &Vec<network::network_core::PortScanResult>, n_total: u32, n_up: u32) {
@@ -73,8 +112,6 @@ async fn main() {
 
     let args = Cli::parse();
 
-    let mut do_range: bool = false;
-
     let timeout = args.timeout;
     let chunksize = args.chunksize;
 
@@ -90,75 +127,9 @@ async fn main() {
         return
     }
 
-    // Unwrap the ip_from into str
+    // Unwrap the ip_from into str and parse the inputs
     let ip_from_string: String = args.ip_from.expect("IP from must be supplied");
-    println!("{}", ip_from_string);
-
-    let ip_from: Ipv4Addr;
-    let ip_to: Option<Ipv4Addr>;
-
-    // First unwrap the IP from address. It can be either a single IPv4 address or a pnet::Ipv4Net
-    // Parse the input into either Ipv4Addr or Ipv4Net
-    match ip_from_string.parse::<Ipv4Addr>() {
-        Ok(ipv4_addr) => {
-            // Handle the single IP case
-            println!("Parsed as Ipv4Addr: {}", ipv4_addr);
-
-            // Assign the value
-            ip_from = ipv4_addr;
-            println!("Assigned ip_from: {}", ip_from);
-
-            // Check IP to
-            match args.ip_to {
-                Some(ip_to) => {
-
-                    // Check if the IP to is valid
-                    let _: Ipv4Addr = match ip_to.parse() {
-                        Ok(ip) => ip,
-                        Err(_) => {
-                            eprintln!("Error: {} is not a valid IPv4 address.", ip_to);
-                            return;
-                        }
-                    };
-
-                    // Check if the range is valid
-                    let ip_to: Ipv4Addr = ip_to.parse().unwrap();
-                    if ip_from >= ip_to {
-                        eprintln!("Invalid IP Range: {:?} to {:?}. Make sure ip_from is logically smaller than ip_to", ip_from, ip_to);
-                        return;
-                    }
-
-                    println!("IP Range: {:?} to {:?} ; verboose {:?}", ip_from, ip_to, args.verboose);
-                    do_range = true;
-                    Some(ip_to)
-                },
-                None => {
-                    println!("IP Single: {:?} ; verboose {:?}", ip_from, args.verboose);
-                    None
-                }
-            };
-        }
-        Err(_) => match ip_from_string.parse::<Ipv4Net>() {
-            Ok(ipv4_net) => {
-                // Handle the network case
-                println!("Parsed as Ipv4Net: {}", ipv4_net);
-
-                // Extract first and last IP
-                let ips: Vec<Ipv4Addr> = ipv4_net.hosts().collect();
-                let ip_from: Ipv4Addr = ips[0];
-                let ip_to: Ipv4Addr = ips[ips.len()-1];
-
-                do_range = true;
-            }
-            Err(_) => {
-                // Handle invalid input
-                eprintln!(
-                    "Failed to parse '{}' as either Ipv4Addr or Ipv4Net",
-                    ip_from_string
-                );
-            }
-        },
-    }
+    let (do_range, ip_from, ip_to) = parse_ip_input(&ip_from_string, args.ip_to);
     
     if !do_range {
         println!("Scanning single IP {:?}", ip_from);
@@ -173,8 +144,10 @@ async fn main() {
         // println!("Deserialized: {:?}", deserialized);
 
     } else {
+
+        let ip_to = ip_to.expect("If we want to scan a range, ip_to must be supplied");
         
-        println!("Scanning IP Range {:?} to {:?}", &ip_from.to_string(),ip_to.to_string());
+        println!("Scanning IP Range {:?} to {:?}", ip_from.to_string(), ip_to.to_string());
 
         // Split IP Range
         let (ip_ranges, n_ips) = split_ip_range(ip_from, ip_to, chunksize);

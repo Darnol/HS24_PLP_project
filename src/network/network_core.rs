@@ -1,11 +1,8 @@
-#![allow(unused_imports)]
 #[allow(dead_code)]
 
-use pnet::datalink::{self, NetworkInterface, Channel};
-use pnet::packet::ipv4::Ipv4Packet;
+use pnet::datalink::{self, NetworkInterface};
 
 use std::time::Duration;
-use std::collections::HashSet;
 use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, TcpStream};
 use dns_lookup::lookup_addr;
@@ -73,7 +70,7 @@ pub fn analyse_interfaces() -> () {
     // Filter out loopback interfaces and interfaces that are not up
     let interfaces_no_loopback: Vec<NetworkInterface> = interfaces.into_iter()
         .filter(|iface| !iface.is_loopback())
-        .filter(|iface| iface.is_up())
+        // .filter(|iface| iface.is_up()) // This excludes every interface on Windows, works on Macos though
         .filter(|iface| iface.ips.len() > 0)
         .collect();
 
@@ -90,7 +87,7 @@ pub fn analyse_interfaces() -> () {
 
         // Print the IPs of possibly relevant interfaces
         for ipv4network in interface.ips {
-            if ipv4network.ip().is_ipv4() {
+            if ipv4network.ip().is_ipv4() && ipv4network.prefix() > 0 {
                 println!("-- Possible interesting IPv4 Address: {}/{}", ipv4network.ip(), ipv4network.prefix());
             }
         }
