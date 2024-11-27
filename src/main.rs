@@ -1,12 +1,10 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
 
 mod network;
 use crate::network::network_core::{analyse_interfaces, ping_host_surge};
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
-use std::net::{Ipv4Addr, IpAddr};
-use std::time::Duration;
+use std::net::{Ipv4Addr};
 use ipnet::Ipv4Net;
 use std::sync::{Arc, Mutex};
 use surge_ping::{Client, Config};

@@ -1,17 +1,16 @@
-#[allow(unused_imports)]
 #[allow(dead_code)]
 
 use pnet::datalink::{self, NetworkInterface};
 
 use std::time::Duration;
-use std::process::Command;
+// use std::process::Command; // Used for ping via systemcommand
 use std::net::{IpAddr, Ipv4Addr, TcpStream};
 use dns_lookup::lookup_addr;
 
 use serde::{Serialize, Deserialize};
 
 use std::sync::{Arc};
-use surge_ping::{Client, PingIdentifier, PingSequence, SurgeError, IcmpPacket, Icmpv4Packet};
+use surge_ping::{Client, PingIdentifier, PingSequence};
 use rand::random;
 
 const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
@@ -181,6 +180,8 @@ pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, v
             if verboose {
                 println!("Ping successful");
             }
+
+            println!("{:?}", _packet);
 
             hostname = match lookup_addr(&IpAddr::from(ip)) {
                 Ok(name) => name,
