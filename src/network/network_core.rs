@@ -11,7 +11,7 @@ use dns_lookup::lookup_addr;
 use serde::{Serialize, Deserialize};
 
 use std::sync::{Arc};
-use surge_ping::{Client, Config, PingIdentifier, PingSequence, SurgeError, IcmpPacket, Icmpv4Packet};
+use surge_ping::{Client, PingIdentifier, PingSequence, SurgeError, IcmpPacket, Icmpv4Packet};
 use rand::random;
 
 const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
@@ -183,11 +183,13 @@ pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, v
                 println!("Ping successful");
             }
             return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_ports);
+            // return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, String::from("Unknown"), vec![]);
         },
         Err(_) => {
             if verboose {
                 println!("Ping not successful");
             }
+            // return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, String::from("Unknown"), vec![]);
             return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_ports);
         }
     };
