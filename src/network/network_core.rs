@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 #[allow(dead_code)]
 
 use pnet::datalink::{self, NetworkInterface};
@@ -9,7 +10,12 @@ use dns_lookup::lookup_addr;
 
 use serde::{Serialize, Deserialize};
 
+use std::sync::{Arc};
+use surge_ping::{Client, Config, PingIdentifier, PingSequence, SurgeError, IcmpPacket, Icmpv4Packet};
+use rand::random;
+
 const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
+const PING_PAYLOAD: [u8; 8] = [0; 8];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Status {
@@ -21,17 +27,17 @@ pub enum Status {
 pub struct PortScanResult {
     pub ip_address: Ipv4Addr,
     pub status: Status,
-    pub hostname: Option<String>, // Only populated if the device is "up"
-    pub open_ports: Option<Vec<u16>>, // Only populated if the device is "up"
+    pub hostname: String,
+    pub open_ports: Vec<u16>,
 }
 
 impl PortScanResult {
-    fn new(ip_address: Ipv4Addr, status: Status, hostname: Option<String>, open_ports: Option<Vec<u16>>) -> Self {
+    fn new(ip_address: Ipv4Addr, status: Status, hostname: String, open_ports: Vec<u16>) -> Self {
         PortScanResult {
             ip_address,
             status: status.clone(),
-            hostname: if let Status::Up = status { hostname } else { None },
-            open_ports: if let Status::Up = status { open_ports } else { None },
+            hostname: hostname,
+            open_ports: open_ports,
         }
     }
 }
@@ -118,25 +124,25 @@ pub async fn ping_host_syscmd(ip: Ipv4Addr, timeout: u32, verboose: bool) -> Por
         .status()
         .expect("Failed to execute command");
 
+    // Get hostname
+    let hostname = match lookup_addr(&IpAddr::from(ip)) {
+        Ok(name) => name,
+        Err(_) => String::from("Unknown"),
+    };
+
+    // Scan common TCP ports
+    let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS);
+
     if status.success() {
         if verboose {
             println!("Ping successful");
         }
-
-        // Get hostname
-        let hostname = match lookup_addr(&IpAddr::from(ip)) {
-            Ok(name) => name,
-            Err(_) => String::from("Unknown"),
-        };
-
-        // Scan common TCP ports
-        let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS);
-        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, Some(hostname), Some(open_ports));
+        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_ports);
     } else {
         if verboose {
             println!("Ping failed");
         }
-        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, None, None);
+        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_ports);
     }
 }
 
@@ -157,4 +163,33 @@ pub fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> Vec<u16
     }
 
     open_ports
+}
+
+pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, verboose: bool) -> PortScanResult {
+    
+    // Get hostname
+    let hostname: String = match lookup_addr(&IpAddr::from(ip)) {
+        Ok(name) => name,
+        Err(_) => String::from("Unknown"),
+    };
+
+    let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS);
+    
+    let mut pinger = client.pinger(IpAddr::V4(ip), PingIdentifier(random())).await;
+    let ping_result = pinger.ping(PingSequence(0), &PING_PAYLOAD).await;
+    match ping_result {
+        Ok((_packet, _duration)) => {
+            if verboose {
+                println!("Ping successful");
+            }
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_ports);
+        },
+        Err(_) => {
+            if verboose {
+                println!("Ping not successful");
+            }
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_ports);
+        }
+    };
+
 }

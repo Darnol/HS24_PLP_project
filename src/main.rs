@@ -1,16 +1,19 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
 mod network;
-use crate::network::network_core::{analyse_interfaces, ping_host_syscmd};
+use crate::network::network_core::{analyse_interfaces, ping_host_syscmd, ping_host_surge};
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
-use std::net::{Ipv4Addr};
+use std::net::{Ipv4Addr, IpAddr};
+use std::time::Duration;
 use ipnet::Ipv4Net;
 use std::sync::{Arc, Mutex};
+use surge_ping::{Client, Config};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::task;
-use futures::future::join_all;
+use futures::{future::join_all, stream, StreamExt};
 
 use clap::{Parser, ArgAction};
 
@@ -92,8 +95,8 @@ fn print_results(results: &Vec<network::network_core::PortScanResult>, n_total: 
                 "IP: {:?} ; Status: {:?} ; Hostname: {:?} ; Open TCP Ports: {:?}",
                 result.ip_address,
                 result.status,
-                result.hostname.as_ref().unwrap(),
-                result.open_ports.as_ref().unwrap(),
+                result.hostname,
+                result.open_ports,
             );
         }
     };
@@ -105,7 +108,6 @@ fn print_results(results: &Vec<network::network_core::PortScanResult>, n_total: 
         }
     };
 }
-
 
 #[tokio::main]
 async fn main() {
@@ -159,20 +161,29 @@ async fn main() {
                 .expect("Invalid template format"),
         );
 
+    
         // Run concurrently
         let shared_vector = Arc::new(Mutex::new(Vec::new()));
+        let config = Config::default();
+        let client: Arc<Client> = Arc::new(Client::new(&config).unwrap());
         let mut tasks = vec![];
         for range in ip_ranges {
             // Generate IPs for the current range
             let ip_to_check = create_ip_from_range(range);
             let vector = Arc::clone(&shared_vector);
             let pb = Arc::clone(&progress_bar);
+            let client_clone = Arc::clone(&client);
             // Spawn a new async task for each IP range
             let task = task::spawn(async move {
                 for ip_addr in ip_to_check {
                     let ip: Ipv4Addr = ip_addr.parse().unwrap();
                     // Call the async ping function
-                    let ping_result = ping_host_syscmd(ip, timeout, false).await;
+                    
+                    
+                    // let ping_result = ping_host_syscmd(ip, timeout, false).await;
+                    let ping_result = ping_host_surge(&client_clone, ip, timeout, false).await;
+                    
+                    
                     // Lock the vector to write the result
                     let mut locked_vector = vector.lock().unwrap();
                     locked_vector.push(ping_result);
@@ -209,8 +220,8 @@ async fn main() {
 
     
     // // Test ping
-    // // let ip: IpAddr = "1.1.1.1".parse().unwrap();
-    // // let ip: IpAddr = "8.8.8.8".parse().unwrap();
+    // let ip: IpAddr = "1.1.1.1".parse().unwrap();
+    // let ip: IpAddr = "8.8.8.8".parse().unwrap();
     // let ip: IpAddr = "198.252.206.16".parse().unwrap(); // Stackoverflow
     // // let ip: IpAddr = "1.2.3.4".parse().unwrap();
     // println!("Pinging host: {:?}", ip);
@@ -218,6 +229,68 @@ async fn main() {
     // println!("Timeout: {:?}", timeout);
     // let success_ping = ping_host_syscmd(ip, timeout, true).await;
     // println!("Status ping {:?} : {:?}", ip, success_ping);
+
+
+    // Test crate surge_ping
+    // let timeout: u32 = 100;
+    // let ip: IpAddr = "0.0.0.0".parse().unwrap(); // ERROR
+    // let ip: IpAddr = "192.168.0.14".parse().unwrap(); // ERROR
+    // let ip: IpAddr = "198.252.206.16".parse().unwrap(); // Stackoverflow
+    // let ipnet: Ipv4Net = "192.168.0.0/28".parse().unwrap(); // Range
+    // let ips: Vec<Ipv4Addr> = ipnet.hosts().collect();
+    
+    // let results = Arc::new(Mutex::new(Vec::new()));
+    // let config = Config::default();
+    // let client: Arc<Client> = Arc::new(Client::new(&config).unwrap());
+    
+    // stream::iter(ips)
+    //     .chunks(10)
+    //     .for_each_concurrent(None, |chunk| {
+    //         let client_clone = Arc::clone(&client);
+    //         let results = Arc::clone(&results);
+    //         async move {
+    //             let mut local_results = Vec::new();
+    //             for ip in chunk {
+    //                 println!("Pinging host: {:?}", ip);
+    //                 let result = ping_host_surge(&client_clone, IpAddr::V4(ip), timeout).await;
+    //                 let local_ping_result = match result {
+    //                     Ok((_packet, _duration)) => {1},
+    //                     Err(_) => {0}
+    //                 };
+    //                 local_results.push(local_ping_result);
+    //             }
+    //             let mut results = results.lock().unwrap();
+    //             results.extend(local_results);
+    //         }
+    //     }).await;
+    // let results = results.lock().unwrap();
+    // println!("Results: {:?}", *results);
+
+    // for ip in ips {
+
+    //     println!("Pinging host: {:?}", ip);
+    //     let result = ping_surge(&client, IpAddr::V4(ip)).await;
+    //     match result {
+    //         Ok((packet, duration)) => {
+    //             // println!("Success: {:?}", packet);
+    //             // println!("Duration: {:?}", duration);
+    //             // // Extract the IP from the packet
+    //             // match packet {
+    //             //     IcmpPacket::V4(packet) => {
+    //             //         let ip = packet.get_source();
+    //             //         println!("Source IP: {:?}", ip);
+    //             //     },
+    //             //     _ => {
+    //             //         println!("Not an Icmpv4Packet");
+    //             //     }
+    //             // }
+    //         },
+    //         Err(_) => {
+    //             // println!("Ping not successful");
+
+    //         }
+    //     }
+    // }
 
     // // Test IP Range splitting
     // let ip_start = "192.168.0.1";
