@@ -181,8 +181,6 @@ pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, v
                 println!("Ping successful");
             }
 
-            println!("{:?}", _packet);
-
             hostname = match lookup_addr(&IpAddr::from(ip)) {
                 Ok(name) => name,
                 Err(_) => hostname,

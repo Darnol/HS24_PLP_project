@@ -2,6 +2,12 @@
 #[allow(dead_code)]
 
 use std::net::Ipv4Addr;
+use ipnet::Ipv4AddrRange;
+
+pub fn create_ipv4_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr) -> Vec<Ipv4Addr> {
+    let hosts = Ipv4AddrRange::new(start_ip, end_ip);
+    hosts.collect()
+}
 
 pub fn create_ip_from_range(range_ip: (String, String)) -> Vec<String> {
     let mut ip_list = vec![];
