@@ -175,12 +175,31 @@ async fn main() {
                 let pb = Arc::clone(&progress_bar);
                 async move {
                     let mut local_results = Vec::new();
-                    for ip in chunk {
-                        let local_ping_result = ping_host_surge(&client_clone, ip, timeout, args.verboose).await;
-                        local_results.push(local_ping_result);
-                    }
+
+                    // Spawn concurrent tasks for pinging and reverse DNS lookups
+                    let tasks: Vec<PortScanResult> = chunk.into_iter().map(|ip| {
+                        async move {
+                            // Perform ping
+                            let status: Status = ping_host_surge(&client, ip, timeout, args.verboose).await;
+
+                            // Perform reverse DNS lookup concurrently
+                            let hostname = reverse_dns_lookup(ip).await;
+
+                            // Combine the results
+                            network::network_core::PortScanResult {
+                                ip_address: ip,
+                                status: ping_result.status,
+                                hostname,
+                                open_tcp_ports: vec![],
+                            }
+                        }
+                    }).collect();
+
+                    // Wait for all tasks in this chunk to complete
+                    let chunk_results = join_all(tasks).await;
+        
                     let mut results = results.lock().unwrap();
-                    results.extend(local_results);
+                    results.extend(chunk_results);
 
                     // Increase the progressbar
                     let pb = pb.lock().unwrap();
