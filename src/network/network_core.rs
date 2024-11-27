@@ -28,19 +28,21 @@ pub struct PortScanResult {
     pub ip_address: Ipv4Addr,
     pub status: Status,
     pub hostname: String,
-    pub open_ports: Vec<u16>,
+    pub open_tcp_ports: Vec<u16>,
 }
 
 impl PortScanResult {
-    fn new(ip_address: Ipv4Addr, status: Status, hostname: String, open_ports: Vec<u16>) -> Self {
+    fn new(ip_address: Ipv4Addr, status: Status, hostname: String, open_tcp_ports: Vec<u16>) -> Self {
         PortScanResult {
             ip_address,
             status: status.clone(),
             hostname: hostname,
-            open_ports: open_ports,
+            open_tcp_ports: open_tcp_ports,
         }
     }
 }
+
+/* DEPRECATED PING via systemcommand
 
 fn create_ping_command(ip_str: &String, timeout: u32) -> String {
     if cfg!(target_os = "windows") {
@@ -68,6 +70,53 @@ fn determine_ping_parameters() -> (String, String) {
         panic!("Unsupported OS detected");
     }
 }
+
+pub async fn ping_host_syscmd(ip: Ipv4Addr, timeout: u32, verboose: bool) -> PortScanResult {
+
+        // ip to String
+        let ip_str = ip.to_string();
+    
+        if verboose {
+            println!("Pinging host: {:?}", ip);
+            println!("Timeout: {:?}", timeout);
+        }
+    
+        // Determine OS and fetch command for ping
+        let command: String = create_ping_command(&ip_str, timeout);
+        
+        if verboose {
+            println!("Command: {}", command);
+        }
+    
+        let (shell, flag) = determine_ping_parameters();
+    
+        let status = Command::new(shell)
+            .args([flag, command])
+            .status()
+            .expect("Failed to execute command");
+    
+        // Get hostname
+        let hostname = match lookup_addr(&IpAddr::from(ip)) {
+            Ok(name) => name,
+            Err(_) => String::from("Unknown"),
+        };
+    
+        // Scan common TCP ports
+        let open_tcp_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS);
+    
+        if status.success() {
+            if verboose {
+                println!("Ping successful");
+            }
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_tcp_ports);
+        } else {
+            if verboose {
+                println!("Ping failed");
+            }
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_tcp_ports);
+        }
+    }
+*/
 
 pub fn analyse_interfaces() -> () {
     // All interfaces
@@ -100,52 +149,6 @@ pub fn analyse_interfaces() -> () {
     }
 }
 
-pub async fn ping_host_syscmd(ip: Ipv4Addr, timeout: u32, verboose: bool) -> PortScanResult {
-
-    // ip to String
-    let ip_str = ip.to_string();
-
-    if verboose {
-        println!("Pinging host: {:?}", ip);
-        println!("Timeout: {:?}", timeout);
-    }
-
-    // Determine OS and fetch command for ping
-    let command: String = create_ping_command(&ip_str, timeout);
-    
-    if verboose {
-        println!("Command: {}", command);
-    }
-
-    let (shell, flag) = determine_ping_parameters();
-
-    let status = Command::new(shell)
-        .args([flag, command])
-        .status()
-        .expect("Failed to execute command");
-
-    // Get hostname
-    let hostname = match lookup_addr(&IpAddr::from(ip)) {
-        Ok(name) => name,
-        Err(_) => String::from("Unknown"),
-    };
-
-    // Scan common TCP ports
-    let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS);
-
-    if status.success() {
-        if verboose {
-            println!("Ping successful");
-        }
-        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_ports);
-    } else {
-        if verboose {
-            println!("Ping failed");
-        }
-        return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_ports);
-    }
-}
-
 pub fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> Vec<u16> {
     let mut open_ports: Vec<u16> = Vec::new();
 
@@ -167,14 +170,10 @@ pub fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> Vec<u16
 
 pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, verboose: bool) -> PortScanResult {
     
-    // Get hostname
-    let hostname: String = match lookup_addr(&IpAddr::from(ip)) {
-        Ok(name) => name,
-        Err(_) => String::from("Unknown"),
-    };
+    // Default hostname and ports are not scanned if not up, set to "Unknown" and empty vector
+    let mut hostname = String::from("Unknown");
+    let mut open_tcp_ports = Vec::<u16>::new();
 
-    let open_ports: Vec<u16> = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS);
-    
     let mut pinger = client.pinger(IpAddr::V4(ip), PingIdentifier(random())).await;
     let ping_result = pinger.ping(PingSequence(0), &PING_PAYLOAD).await;
     match ping_result {
@@ -182,7 +181,15 @@ pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, v
             if verboose {
                 println!("Ping successful");
             }
-            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_ports);
+
+            hostname = match lookup_addr(&IpAddr::from(ip)) {
+                Ok(name) => name,
+                Err(_) => hostname,
+            };
+
+            open_tcp_ports.extend(scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS));
+            
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_tcp_ports);
             // return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, String::from("Unknown"), vec![]);
         },
         Err(_) => {
@@ -190,7 +197,7 @@ pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, v
                 println!("Ping not successful");
             }
             // return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, String::from("Unknown"), vec![]);
-            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_ports);
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_tcp_ports);
         }
     };
 

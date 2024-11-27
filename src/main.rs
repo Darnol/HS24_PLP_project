@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 
 mod network;
-use crate::network::network_core::{analyse_interfaces, ping_host_syscmd, ping_host_surge};
+use crate::network::network_core::{analyse_interfaces, ping_host_surge};
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
 use std::net::{Ipv4Addr, IpAddr};
@@ -96,7 +96,7 @@ fn print_results(results: &Vec<network::network_core::PortScanResult>, n_total: 
                 result.ip_address,
                 result.status,
                 result.hostname,
-                result.open_ports,
+                result.open_tcp_ports,
             );
         }
     };
@@ -132,11 +132,15 @@ async fn main() {
     // Unwrap the ip_from into str and parse the inputs
     let ip_from_string: String = args.ip_from.expect("IP from must be supplied");
     let (do_range, ip_from, ip_to) = parse_ip_input(&ip_from_string, args.ip_to);
+
+    // Create a ping client
+    let config = Config::default();
+    let client: Arc<Client> = Arc::new(Client::new(&config).unwrap());    
     
     if !do_range {
         println!("Scanning single IP {:?}", ip_from);
         
-        let success_ping = ping_host_syscmd(ip_from, timeout, true).await;
+        let success_ping = ping_host_surge(&client, ip_from, timeout, true).await;
         println!("Status ping {:?} : {:?}", ip_from, success_ping);
 
         // // Test serializing and deserializing
@@ -164,8 +168,6 @@ async fn main() {
     
         // Run concurrently
         let shared_vector = Arc::new(Mutex::new(Vec::new()));
-        let config = Config::default();
-        let client: Arc<Client> = Arc::new(Client::new(&config).unwrap());
         let mut tasks = vec![];
         for range in ip_ranges {
             // Generate IPs for the current range
@@ -177,13 +179,7 @@ async fn main() {
             let task = task::spawn(async move {
                 for ip_addr in ip_to_check {
                     let ip: Ipv4Addr = ip_addr.parse().unwrap();
-                    // Call the async ping function
-                    
-                    
-                    // let ping_result = ping_host_syscmd(ip, timeout, false).await;
                     let ping_result = ping_host_surge(&client_clone, ip, timeout, false).await;
-                    
-                    
                     // Lock the vector to write the result
                     let mut locked_vector = vector.lock().unwrap();
                     locked_vector.push(ping_result);
