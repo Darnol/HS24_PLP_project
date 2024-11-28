@@ -179,7 +179,7 @@ pub async fn reverse_dns_lookup(ip: Ipv4Addr) -> String {
         Ok(response) => {
             response.iter().next().unwrap().to_string()
         },
-        Err(e) => {
+        Err(_) => {
             String::from("Unknown")
         },
     }
