@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 mod network;
-use crate::network::network_core::{analyse_interfaces, ping_host_surge};
+use crate::network::network_core::{analyse_interfaces, ping_host_surge, reverse_dns_lookup, PortScanResult};
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
 use std::net::{Ipv4Addr};
@@ -11,7 +11,7 @@ use surge_ping::{Client, Config};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::task;
-use futures::{future::join_all, stream, StreamExt};
+use futures::future::join_all;
 
 use clap::{Parser, ArgAction};
 
@@ -177,7 +177,19 @@ async fn main() {
             let task = task::spawn(async move {
                 for ip_addr in ip_to_check {
                     let ip: Ipv4Addr = ip_addr.parse().unwrap();
-                    let ping_result = ping_host_surge(&client_clone, ip, timeout, false).await;
+                    
+                    // Ping and resolve hostname
+                    let (status, open_tcp_ports) = ping_host_surge(&client_clone, ip, timeout, false).await;
+                    let hostname = reverse_dns_lookup(ip).await;
+
+                    // Create a new result
+                    let ping_result = PortScanResult {
+                        ip_address: ip,
+                        status: status,
+                        hostname: hostname,
+                        open_tcp_ports: open_tcp_ports,
+                    };
+
                     // Lock the vector to write the result
                     let mut locked_vector = vector.lock().unwrap();
                     locked_vector.push(ping_result);
