@@ -144,13 +144,13 @@ async fn main() {
         // Ping and resolve hostname and tcp port scan
         let status = ping_host_surge(&client, ip_from, false).await;
         let hostname = reverse_dns_lookup(ip_from).await;
-        let async_tcp_ports = scan_ports_tcp(ip_from, Duration::from_millis(timeout as u64), &TCP_PORTS).await;
+        let open_tcp_ports = scan_ports_tcp(ip_from, Duration::from_millis(timeout as u64), &TCP_PORTS).await;
 
         let ping_result = PortScanResult{
             ip_address: ip_from,
             status: status,
             hostname: hostname,
-            open_tcp_ports: async_tcp_ports,
+            open_tcp_ports: open_tcp_ports,
         };
         
         println!("Result ping {:?}", ping_result);
