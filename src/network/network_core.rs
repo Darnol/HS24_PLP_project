@@ -149,7 +149,7 @@ pub fn analyse_interfaces() -> () {
     }
 }
 
-pub fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> Vec<u16> {
+pub async fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> Vec<u16> {
     let mut open_ports: Vec<u16> = Vec::new();
 
     for port in ports {
@@ -176,16 +176,17 @@ pub async fn reverse_dns_lookup(ip: Ipv4Addr) -> String {
     .expect("Failed to create resolver");
 
     match resolver.reverse_lookup(IpAddr::V4(ip)).await {
-        Ok(response) => response.iter().next().unwrap().to_string(),
-        Err(_) => String::from("Unknown"),
+        Ok(response) => {
+            response.iter().next().unwrap().to_string()
+        },
+        Err(e) => {
+            String::from("Unknown")
+        },
     }
 }
 
-pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, verboose: bool) -> (Status, Vec<u16>) {
+pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, verboose: bool) -> Status {
     
-    // Default open_tcp_ports is empty
-    let mut open_tcp_ports = Vec::<u16>::new();
-
     let mut pinger = client.pinger(IpAddr::V4(ip), PingIdentifier(random())).await;
     let ping_result = pinger.ping(PingSequence(0), &PING_PAYLOAD).await;
     match ping_result {
@@ -193,17 +194,13 @@ pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, v
             if verboose {
                 println!("Ping successful");
             }
-
-            open_tcp_ports.extend(scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS));
-            
-            return (Status::Up, open_tcp_ports);
+            Status::Up
         },
         Err(_) => {
             if verboose {
                 println!("Ping not successful");
             }
-            return (Status::Down, open_tcp_ports);
+            Status::Down
         }
-    };
-
+    }
 }
