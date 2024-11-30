@@ -11,8 +11,7 @@ use serde::{Serialize, Deserialize};
 use std::sync::{Arc};
 use surge_ping::{Client, PingIdentifier, PingSequence};
 use rand::random;
-use trust_dns_resolver::config::*;
-use trust_dns_resolver::TokioAsyncResolver;
+use dns_lookup::lookup_addr;
 
 const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
 const PING_PAYLOAD: [u8; 8] = [0; 8];
@@ -169,19 +168,10 @@ pub async fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> V
 }
 
 pub async fn reverse_dns_lookup(ip: Ipv4Addr) -> String {
-    let resolver = TokioAsyncResolver::tokio(
-        ResolverConfig::default(),
-        ResolverOpts::default(),
-    )
-    .expect("Failed to create resolver");
-
-    match resolver.reverse_lookup(IpAddr::V4(ip)).await {
-        Ok(response) => {
-            response.iter().next().unwrap().to_string()
-        },
-        Err(_) => {
-            String::from("Unknown")
-        },
+    // do the lookup
+    match lookup_addr(&IpAddr::from(ip)) {
+        Ok(name) => name,
+        Err(_) => String::from("Unknown"),
     }
 }
 
