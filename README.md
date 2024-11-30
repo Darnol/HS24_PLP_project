@@ -1,23 +1,41 @@
-# HS24_PLP_project
-HS24 Paradigms of Programming Languages Project
+# Concurrent high-performance network scanner
+HS24 Paradigms of Programming Languages - Project  
+Author: Dominik Arnold (dominikjohann.arnold@uzh.ch)
 
-# Windows
-netowkring is fuuuuucked.
-see  
-https://github.com/libpnet/libpnet/issues/332
+# How to run it?
 
-putting the Package.lib and wpcap.lib into the .rustup toolchain as proposed
---> Does not really work
-
+## Install Rust
+To get started, you'll have to install Rust, i.e. the compiler `rustc` and the package (called 'crate' in Rust) management software `cargo`.  
+There are excellent instructions on the official Rust homepage: https://www.rust-lang.org/tools/install  
+There you can download the `rustup` tool that will guide you through the installation process.  
+After the installation, check if the compiler and cargo is installed by opening a terminal and executing
+```bash
+rustc --version
+cargo --version
+```
+## Run the program
+From a terminal in the root run `cargo build` to install all neccesary dependencies.  
+Then run `cargo run -- --help` to display the help page of the CLI tool. Some common use cases:
+- `cargo run` - Only run the network interface analysis
+- `cargo run 192.168.0.1` - Scan a single IPv4 address
+- `cargo run 192.168.0.0/24` - Scan a range given by CIDR notation, in this case hosts from 192.168.0.1 to 192.168.0.254
+- `cargo run 192.168.0.1 192.168.0.10` - Scan a range given by two IPv4 addresses, in this case from 192.168.0.1 to 192.168.0.10
 
 # What does it do?
 - Analyses all the available interfaces at start
-- Uses the system command `ping` to check if a host is live
-- Uses `TcpStream` to check some common TCP ports
-- Uses `dns_lookup` to check if DNS resolution can be done to get a hostname
+- Accepts keywords to specify a single IPv4 address or an IPv4 address range
+    - A single IPv4 address
+    - Two IPv4 addresses specifying the start and end of the desired range
+    - A CIDR notation [see here](https://de.wikipedia.org/wiki/Classless_Inter-Domain_Routing) specifying a range
+- Given a IPv4 address or range, it will scan ever host:
+    - Uses an ICMP ping command to check a hosts liveliness
+    - Uses TCP socket to detect open TCP ports
+    - Uses the OS DNS resolver to determine the human-readable hostname if available
+- Uses Rusts concurrency features to scan the range of hosts as quickly as possible
+- Will print a final report
 
-
-# Run the docker container to show nmap
+# Run the docker container to test nmap on Windows
+If you're on a windows machine 
 ```
 docker build -t nmap_test .
 docker run -itd --name nmap_test_container nmap_test
@@ -33,17 +51,19 @@ nmap -v -F 192.168.0.1/24
 
 
 # How to demonstrate
-1. `cargo run` - Determine my subnet and show the interfaces
-2. `cargo run 10.28.207.15/26` - Show how it scans the subnet, although this is a rather boring result
-3. `nmap -v 10.28.207.15/26` - To show what namp is capable of
+- `cargo run -- --help` - Show the CLI help
+- `cargo run` - Determine my subnet and show the interfaces
+- `cargo run 10.28.207.15/26` - Show how it scans the subnet, although this is a rather boring result
+- `nmap -v 10.28.207.15/26` - To show what namp is capable of
 
 
 
 # Take away
+- There are many different crates and possibilities to implement networking
+    - For example for a reverse DNS lookup, there are at least 4 crates that promise a solution, some more successful, some less. The result oftentimes depends on the used OS.
+- There are many many badly maintained crates I think
 - Very different for variying OS. Windwos vs Macos
     - Macos hostname resolution is really not working
     - Works on Windows at home in the home network
     - Some crates did not work on Windows, only implemented for Linux/Unix
-- There are many different crates and possibilities to implement networking
-- There are many many badly maintained crates I think
 - Especially the concurrency can be implemented in like 10 different ways
