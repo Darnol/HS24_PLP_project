@@ -5,14 +5,13 @@ use pnet::datalink::{self, NetworkInterface};
 use std::time::Duration;
 // use std::process::Command; // Used for ping via systemcommand
 use std::net::{IpAddr, Ipv4Addr, TcpStream};
+use dns_lookup::lookup_addr;
 
 use serde::{Serialize, Deserialize};
 
 use std::sync::{Arc};
 use surge_ping::{Client, PingIdentifier, PingSequence};
 use rand::random;
-use trust_dns_resolver::config::*;
-use trust_dns_resolver::TokioAsyncResolver;
 
 const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
 const PING_PAYLOAD: [u8; 8] = [0; 8];
@@ -168,21 +167,12 @@ pub fn scan_ports_tcp(ip: Ipv4Addr, timeout: Duration, ports: &[u16]) -> Vec<u16
     open_ports
 }
 
-pub async fn reverse_dns_lookup(ip: Ipv4Addr) -> String {
-    let resolver = TokioAsyncResolver::tokio(
-        ResolverConfig::default(),
-        ResolverOpts::default(),
-    )
-    .expect("Failed to create resolver");
-
-    match resolver.reverse_lookup(IpAddr::V4(ip)).await {
-        Ok(response) => response.iter().next().unwrap().to_string(),
-        Err(_) => String::from("Unknown"),
-    }
-}
-
-pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, verboose: bool) -> Status {
+pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, verboose: bool) -> PortScanResult {
     
+    // Default hostname and ports are not scanned if not up, set to "Unknown" and empty vector
+    let mut hostname = String::from("Unknown");
+    let mut open_tcp_ports = Vec::<u16>::new();
+
     let mut pinger = client.pinger(IpAddr::V4(ip), PingIdentifier(random())).await;
     let ping_result = pinger.ping(PingSequence(0), &PING_PAYLOAD).await;
     match ping_result {
@@ -190,13 +180,23 @@ pub async fn ping_host_surge(client: &Arc<Client>, ip: Ipv4Addr, timeout: u32, v
             if verboose {
                 println!("Ping successful");
             }
-            Status::Up
+
+            hostname = match lookup_addr(&IpAddr::from(ip)) {
+                Ok(name) => name,
+                Err(_) => hostname,
+            };
+
+            open_tcp_ports.extend(scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS));
+            
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, hostname, open_tcp_ports);
+            // return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Up, String::from("Unknown"), vec![]);
         },
         Err(_) => {
             if verboose {
                 println!("Ping not successful");
             }
-            Status::Down
+            // return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, String::from("Unknown"), vec![]);
+            return PortScanResult::new(ip.to_string().parse().unwrap(), Status::Down, hostname, open_tcp_ports);
         }
     };
 
