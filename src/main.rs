@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 
 mod network;
-use crate::network::network_core::{analyse_interfaces, ping_host_surge};
+use crate::network::network_core::{analyse_interfaces, ping_host_surge, reverse_dns_lookup, scan_ports_tcp, PortScanResult};
 use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
+use std::time::Duration;
 use std::net::{Ipv4Addr};
 use ipnet::Ipv4Net;
 use std::sync::{Arc, Mutex};
@@ -11,9 +12,11 @@ use surge_ping::{Client, Config};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::task;
-use futures::{future::join_all, stream, StreamExt};
+use futures::future::join_all;
 
 use clap::{Parser, ArgAction};
+
+const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
 
 #[derive(Parser)]
 struct Cli {
@@ -138,8 +141,19 @@ async fn main() {
     if !do_range {
         println!("Scanning single IP {:?}", ip_from);
         
-        let success_ping = ping_host_surge(&client, ip_from, timeout, true).await;
-        println!("Status ping {:?} : {:?}", ip_from, success_ping);
+        // Ping and resolve hostname and tcp port scan
+        let status = ping_host_surge(&client, ip_from, false).await;
+        let hostname = reverse_dns_lookup(ip_from).await;
+        let open_tcp_ports = scan_ports_tcp(ip_from, Duration::from_millis(timeout as u64), &TCP_PORTS).await;
+
+        let ping_result = PortScanResult{
+            ip_address: ip_from,
+            status: status,
+            hostname: hostname,
+            open_tcp_ports: open_tcp_ports,
+        };
+        
+        println!("Result ping {:?}", ping_result);
 
         // // Test serializing and deserializing
         // let serialized = serde_json::to_string(&success_ping).unwrap();
@@ -177,7 +191,20 @@ async fn main() {
             let task = task::spawn(async move {
                 for ip_addr in ip_to_check {
                     let ip: Ipv4Addr = ip_addr.parse().unwrap();
-                    let ping_result = ping_host_surge(&client_clone, ip, timeout, false).await;
+                    
+                    // Ping and resolve hostname and tcp port scan
+                    let status = ping_host_surge(&client_clone, ip, false).await;
+                    let hostname = reverse_dns_lookup(ip).await;
+                    let open_tcp_ports = scan_ports_tcp(ip, Duration::from_millis(timeout as u64), &TCP_PORTS).await;
+
+                    // Create a new result
+                    let ping_result = PortScanResult {
+                        ip_address: ip,
+                        status: status,
+                        hostname: hostname,
+                        open_tcp_ports: open_tcp_ports,
+                    };
+
                     // Lock the vector to write the result
                     let mut locked_vector = vector.lock().unwrap();
                     locked_vector.push(ping_result);
