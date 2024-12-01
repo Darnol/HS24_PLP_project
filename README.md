@@ -34,8 +34,16 @@ Then run `cargo run -- --help` to display the help page of the CLI tool. Some co
 - Uses Rusts concurrency features to scan the range of hosts as quickly as possible
 - Will print a final report
 
+# How to demonstrate the tool
+- `cargo run -- --help` - Show the CLI help
+- `cargo run` - Determine my subnet and show the interfaces
+- `cargo run 10.28.207.15/27` - Show how it scans the subnet, although this is a rather boring result
+- `cargo run 10.28.207.1 10.28.207.20` - Show an alternative way of specifying the IP range
+- `nmap -v 10.28.207.15/27` - To show what namp is capable of
+
 # Run the docker container to test nmap on Windows
-If you're on a windows machine 
+If you're on a windows machine, you won't be able to test out the nmap tool, since it is written for unix systems. You can spin up a docker container and test the namp tool there:  
+
 ```
 docker build -t nmap_test .
 docker run -itd --name nmap_test_container nmap_test
@@ -49,21 +57,11 @@ nmap -v -F 192.168.0.1/24
 -F fast (not 10000 ports per host)
 ```
 
-
-# How to demonstrate
-- `cargo run -- --help` - Show the CLI help
-- `cargo run` - Determine my subnet and show the interfaces
-- `cargo run 10.28.207.15/26` - Show how it scans the subnet, although this is a rather boring result
-- `nmap -v 10.28.207.15/26` - To show what namp is capable of
-
-
-
 # Take away
 - There are many different crates and possibilities to implement networking
     - For example for a reverse DNS lookup, there are at least 4 crates that promise a solution, some more successful, some less. The result oftentimes depends on the used OS.
-- There are many many badly maintained crates I think
+- There are many many badly maintained crates
 - Very different for variying OS. Windwos vs Macos
-    - Macos hostname resolution is really not working
     - Works on Windows at home in the home network
     - Some crates did not work on Windows, only implemented for Linux/Unix
 - Especially the concurrency can be implemented in like 10 different ways
