@@ -2,9 +2,9 @@
 
 mod network;
 use crate::network::network_core::{analyse_interfaces, ping_host_surge};
-use crate::network::network_helpers::{split_ip_range, create_ip_from_range, create_ipv4_range};
+use crate::network::network_helpers::{split_ip_range, create_ip_from_range};
 
-use std::net::{Ipv4Addr, IpAddr};
+use std::net::{Ipv4Addr};
 use ipnet::Ipv4Net;
 use std::sync::{Arc, Mutex};
 use surge_ping::{Client, Config};
@@ -138,7 +138,7 @@ async fn main() {
     if !do_range {
         println!("Scanning single IP {:?}", ip_from);
         
-        let success_ping = ping_host_surge(&client, ip_from, timeout, args.verboose).await;
+        let success_ping = ping_host_surge(&client, ip_from, timeout, true).await;
         println!("Status ping {:?} : {:?}", ip_from, success_ping);
 
         // // Test serializing and deserializing
@@ -153,10 +153,9 @@ async fn main() {
         
         println!("Scanning IP Range {:?} to {:?}", ip_from.to_string(), ip_to.to_string());
 
-        // Get all IPs
-        let ipv4_range: Vec<Ipv4Addr> = create_ipv4_range(ip_from, ip_to);
-        let n_ips = ipv4_range.len() as u32;
-        
+        // Split IP Range
+        let (ip_ranges, n_ips) = split_ip_range(ip_from, ip_to, chunksize);
+
         let progress_bar = Arc::new(Mutex::new(ProgressBar::new(n_ips as u64)));
         progress_bar.lock().unwrap().set_style(
             ProgressStyle::default_bar()
@@ -166,40 +165,50 @@ async fn main() {
 
     
         // Run concurrently
-        let results = Arc::new(Mutex::new(Vec::new()));
-        stream::iter(ipv4_range)
-            .chunks(chunksize)
-            .for_each_concurrent(None, |chunk| {
-                let client_clone = Arc::clone(&client);
-                let results = Arc::clone(&results);
-                let pb = Arc::clone(&progress_bar);
-                async move {
-                    let mut local_results = Vec::new();
-                    for ip in chunk {
-                        let local_ping_result = ping_host_surge(&client_clone, ip, timeout, args.verboose).await;
-                        local_results.push(local_ping_result);
-                    }
-                    let mut results = results.lock().unwrap();
-                    results.extend(local_results);
-
-                    // Increase the progressbar
+        let shared_vector = Arc::new(Mutex::new(Vec::new()));
+        let mut tasks = vec![];
+        for range in ip_ranges {
+            // Generate IPs for the current range
+            let ip_to_check = create_ip_from_range(range);
+            let vector = Arc::clone(&shared_vector);
+            let pb = Arc::clone(&progress_bar);
+            let client_clone = Arc::clone(&client);
+            // Spawn a new async task for each IP range
+            let task = task::spawn(async move {
+                for ip_addr in ip_to_check {
+                    let ip: Ipv4Addr = ip_addr.parse().unwrap();
+                    let ping_result = ping_host_surge(&client_clone, ip, timeout, false).await;
+                    // Lock the vector to write the result
+                    let mut locked_vector = vector.lock().unwrap();
+                    locked_vector.push(ping_result);
+                    // Lock pb and increment
                     let pb = pb.lock().unwrap();
                     pb.inc(1);
                 }
-            }).await;
-        let results = results.lock().unwrap();
+            });
+
+            tasks.push(task);
+        }
+        // Wait for all async tasks to finish
+        join_all(tasks).await;
+        // Print the results
+        let mut locked_vector = shared_vector.lock().unwrap();
         
+        // Pretty print the results
+        // Sort by IP
+        locked_vector.sort_by(|a, b| a.ip_address.cmp(&b.ip_address));
+
         // Gather information about how many IP scanned, how many are up etc
-        let n_total: u32 = results.len() as u32;
+        let n_total: u32 = locked_vector.len() as u32;
         let mut n_up: u32 = 0;
-        results.iter().for_each(|result| {
+        locked_vector.iter().for_each(|result| {
             if result.status == network::network_core::Status::Up {
                 n_up += 1;
             }
         });
 
         // Print the results
-        print_results(&results, n_total, n_up);
+        print_results(&locked_vector, n_total, n_up);
     }
 
 
