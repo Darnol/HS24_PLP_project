@@ -20,17 +20,17 @@ const TCP_PORTS: [u16; 11] = [20,21,22,23,25,53,80,110,143,443,445];
 
 #[derive(Parser)]
 struct Cli {
-    #[arg(help = "Either IPv4 address without subnet or CIDR notation. If ip_to not set, ip_from is scanned, otherwise range from ip_from to ip_to")]
+    #[arg(help = "Either IPv4 address without subnet mask or CIDR notation. If it is CIDR notation, ip_to is ignored. If IPv4 addres and ip_to not set, ip_from is scanned, otherwise range from ip_from to ip_to")]
     ip_from: Option<String>,
     
     #[arg(help = "If ip_from is a IPv4 address, this is the end of the range. Must be greater than ip_from")]
     ip_to: Option<String>,
     
-    #[arg(help = "Timeout in milliseconds. Defaults to 100")]
+    #[arg(help = "Timeout in milliseconds")]
     #[arg(short, long, default_value_t=100)]
     timeout: u32,
     
-    #[arg(help = "If IP range is specified, number of IP addresses each worker receives. Defaults to 10")]
+    #[arg(help = "If IP range is specified, number of IP addresses each worker receives")]
     #[arg(short, long, default_value_t=10)]
     chunksize: usize,
     
